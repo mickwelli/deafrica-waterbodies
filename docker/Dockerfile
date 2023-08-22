@@ -1,18 +1,8 @@
-FROM osgeo/gdal:ubuntu-full-3.6.3
+ARG py_env_path=/env
+ARG V_BASE=3.3.0
 
-ENV SHELL=bash
-
-ENV DEBIAN_FRONTEND=non-interactive
-
-# Install poetry in our environment
-ENV POETRY_HOME="/opt/poetry"
-ENV PATH="$POETRY_HOME/bin:$PATH"
-RUN curl -sSL https://install.python-poetry.org | python3 -
-RUN echo $(poetry --version)
-
-# Solve numba installation issues. 
-#RUN apt-get install clang lldb lld
-#RUN export LLVM_CONFIG="/usr/bin/$(ls /usr/bin/ | grep llvm-config)"
+FROM opendatacube/geobase-builder:${V_BASE} as env_builder
+ENV LC_ALL=C.UTF-8
 
 # Install our Python requirements
 COPY requirements.txt /conf/
@@ -64,3 +54,18 @@ RUN env && echo $PATH && pip freeze && pip check
 
 # Make sure it's working
 RUN waterbodies-ts --version
+
+# Solve numba installation issues. 
+#RUN apt-get install clang lldb lld
+#RUN export LLVM_CONFIG="/usr/bin/$(ls /usr/bin/ | grep llvm-config)"
+
+# Install poetry 
+#ENV POETRY_HOME="/opt/poetry"
+#ENV PATH="$POETRY_HOME/bin:$PATH"
+#RUN curl -sSL https://install.python-poetry.org | python3 -
+#RUN echo $(poetry --version)
+
+# References for building image:
+# https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
+# https://github.com/digitalearthafrica/deafrica-sandbox
+# https://github.com/opendatacube/odc-stats
