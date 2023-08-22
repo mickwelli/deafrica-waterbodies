@@ -1,3 +1,12 @@
+"""
+Make waterbody polygons from the Water Observations from Space all-time
+summary.
+
+Geoscience Australia - 2021
+    Claire Krause
+    Matthew Alger
+"""
+
 import datacube
 import os
 import math
@@ -10,7 +19,7 @@ import geopandas as gpd
 from datacube.utils.geometry import Geometry
 from deafrica_tools.spatial import xr_vectorize
 
-from .helpers import check_wetness_thresholds, setup_output_fp, assign_unique_ids
+from .helpers import check_wetness_thresholds, setup_output_fp, assign_unique_ids, get_product_tiles, merge_polygons_at_tile_boundary
 from .filter import filter_waterbodies
 
 
@@ -138,6 +147,7 @@ def get_polygons_using_thresholds(
 
 def get_waterbodies(
         aoi_gdf: gpd.geodataframe.GeoDataFrame,
+        continental_run: bool = False,
         dask_chunks: dict[str, int] = {"x": 3000, "y": 3000, "time": 1},
         resolution: tuple[int, int] = (-30, 30),
         output_crs: str = "EPSG:6933",
@@ -158,15 +168,27 @@ def get_waterbodies(
         output_base_filename: str = "waterbodies",
         output_file_type: str = "GeoJSON",
 ):
+    # Check if this is a continental run.
+    if aoi_gdf is None and continental_run:
+        _log.info("Running for all the WOfS All Time Summary tiles covering Africa...")
+    elif aoi_gdf is not None and continental_run:
+        raise ValueError("If setting an area of interest, set `continental_run=False`")
+    elif aoi_gdf is not None and not continental_run:
+        _log.info("Running for the WOfS All Time Summary tiles covering the defined area of interest...")
+
     # Set up some file names for outputs
     _log.info("Setting up output directory")
-
     final_output_fp = setup_output_fp(ouptut_folder=ouptut_folder,
                                       output_base_filename=output_base_filename,
                                       output_file_type=output_file_type)
 
+    # Get the tiles covering the area of interest.
+    _log.info("Loading tiles..")
+    aoi_gdf = aoi_gdf.to_crs(output_crs)
+    tiles = get_product_tiles(product="wofs_ls_summary_alltime", aoi_gdf=aoi_gdf)
+
     _log.info("Generating the first temporary set of waterbody polygons.")
-    temp_primary, temp_secondary = get_polygons_using_thresholds(input_gdf=aoi_gdf,
+    temp_primary, temp_secondary = get_polygons_using_thresholds(input_gdf=tiles,
                                                                  dask_chunks=dask_chunks,
                                                                  resolution=resolution,
                                                                  output_crs=output_crs,
@@ -174,10 +196,15 @@ def get_waterbodies(
                                                                  primary_threshold=primary_threshold,
                                                                  secondary_threshold=secondary_threshold,
                                                                  )
-    _log.info("Filter waterbodies")
+
+    _log.info("Merging polygons at tile boundaries...")
+    merged_temp_primary = merge_polygons_at_tile_boundary(input_polygons=temp_primary, tiles=tiles)
+    merged_temp_secondary = merge_polygons_at_tile_boundary(input_polygons=temp_secondary, tiles=tiles)
+
+    _log.info("Filtering waterbodies...")
     filtered_polygons = filter_waterbodies(
-        primary_threshold_polygons=temp_primary,
-        secondary_threshold_polygons=temp_secondary,
+        primary_threshold_polygons=merged_temp_primary,
+        secondary_threshold_polygons=merged_temp_secondary,
         min_polygon_size=min_polygon_size,
         max_polygon_size=max_polygon_size,
         filter_out_ocean_polygons=filter_out_ocean_polygons,
@@ -190,7 +217,7 @@ def get_waterbodies(
         pp_test_threshold=pp_test_threshold,
     )
 
-    _log.info("Assigning unique ids to each polygon.")
+    _log.info("Assigning unique ids to each polygon....")
     filtered_polygons_with_unique_ids = assign_unique_ids(filtered_polygons)
 
     _log.info("Writing waterbodies to disk...")
