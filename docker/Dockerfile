@@ -1,14 +1,18 @@
-ARG py_env_path=/env
-ARG V_BASE=3.3.0
+FROM osgeo/gdal:ubuntu-full-3.6.3
 
-FROM opendatacube/geobase-builder:${V_BASE} as env_builder
-ENV LC_ALL=C.UTF-8
+ENV SHELL=bash
+
+ENV DEBIAN_FRONTEND=non-interactive
 
 # Install poetry in our environment
 ENV POETRY_HOME="/opt/poetry"
 ENV PATH="$POETRY_HOME/bin:$PATH"
 RUN curl -sSL https://install.python-poetry.org | python3 -
 RUN echo $(poetry --version)
+
+# Solve numba installation issues. 
+#RUN apt-get install clang lldb lld
+#RUN export LLVM_CONFIG="/usr/bin/$(ls /usr/bin/ | grep llvm-config)"
 
 # Install our Python requirements
 COPY requirements.txt /conf/
