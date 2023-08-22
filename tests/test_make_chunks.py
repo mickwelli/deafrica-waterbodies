@@ -12,7 +12,7 @@ import uuid
 
 import pytest
 
-import deafrica_waterbodies.make_chunks as make_chunks
+import deafrica_waterbodies.waterbodies.polygons.make_chunks as make_chunks
 
 
 # Test directory.

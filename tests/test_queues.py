@@ -11,7 +11,7 @@ from botocore.exceptions import ClientError
 from moto import mock_sqs
 import pytest
 
-from deafrica_waterbodies import queues
+from deafrica_waterbodies.waterbodies.s3 import queues
 
 
 @mock_sqs

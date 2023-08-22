@@ -365,7 +365,7 @@ def main(ids, config, shapefile, start, end, missing_only,
 
     # Do the import here so that the CLI is fast,
     # because this import is sloooow.
-    import deafrica_waterbodies.waterbody_timeseries_functions as dw_wtf
+    import deafrica_waterbodies.waterbodies.timeseries.waterbody_timeseries_functions as dw_wtf
 
     # Get the CRS from the shapefile.
     crs = get_crs(config_dict['shape_file'])
