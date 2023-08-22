@@ -179,8 +179,8 @@ def get_product_tiles(product="wofs_ls_summary_alltime", aoi_gdf=None):
         crs = aoi_gdf.crs
         regions = regions.to_crs(crs)
 
-        tiles, _ = filter_geodataframe_by_intersection(aoi_gdf,
-                                                       regions,
+        tiles, _ = filter_geodataframe_by_intersection(regions,
+                                                       aoi_gdf,
                                                        filtertype="intersects",
                                                        invert_mask=False,
                                                        return_inverse=False)
