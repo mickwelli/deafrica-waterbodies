@@ -162,6 +162,7 @@ def get_product_regions(
     regions_url = f"{base_url}{product}"
 
     regions = gpd.read_file(regions_url).drop('count', axis=1)
+    regions.set_index("region_code", inplace=True)
 
     return regions
 
