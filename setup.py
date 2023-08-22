@@ -6,11 +6,11 @@ from shutil import rmtree
 from setuptools import find_packages, setup, Command
 
 # Package metadata.
-NAME = 'dea-waterbodies'
-DESCRIPTION = 'Digital Earth Australia Waterbodies'
-URL = 'https://github.com/GeoscienceAustralia/dea-waterbodies'
-EMAIL = 'dea@ga.gov.au'
-AUTHOR = 'Geoscience Australia'
+NAME = 'deafrica-waterbodies'
+DESCRIPTION = 'Digital Earth Africa Waterbodies'
+URL = 'https://github.com/digitalearthafrica/deafrica-waterbodies'
+EMAIL = 'systems@digitalearthafrica.org'
+AUTHOR = 'Digital Earth Africa'
 REQUIRES_PYTHON = '>=3.6.0'
 
 # What packages are required for this module to be executed?
@@ -48,9 +48,7 @@ setup(
     url=URL,
     packages=find_packages(exclude=["tests", "*.tests", "*.tests.*", "tests.*",
                                     "test", "*.test", "*.test.*", "test.*"]),
-    entry_points={
-        'console_scripts': ['waterbodies-ts=dea_waterbodies.make_time_series:main'],
-    },
+    #entry_points={'console_scripts': ['waterbodies-ts=dea_waterbodies.make_time_series:main'],},
     install_requires=REQUIRED,
     extras_require=EXTRAS,
     include_package_data=True,
