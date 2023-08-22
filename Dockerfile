@@ -4,6 +4,12 @@ ARG V_BASE=3.3.0
 FROM opendatacube/geobase-builder:${V_BASE} as env_builder
 ENV LC_ALL=C.UTF-8
 
+# Install poetry in our environment
+ENV POETRY_HOME="/opt/poetry"
+ENV PATH="$POETRY_HOME/bin:$PATH"
+RUN curl -sSL https://install.python-poetry.org | python3 -
+RUN echo $(poetry --version)
+
 # Install our Python requirements
 COPY requirements.txt /conf/
 ARG py_env_path
