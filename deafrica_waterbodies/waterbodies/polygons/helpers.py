@@ -1,8 +1,13 @@
+""" 
+Helper functions.
+"""
 import os
 import math
 import logging
+import shapely
 import numpy as np
 import geohash as gh
+import pandas as pd
 import geopandas as gpd
 
 _log = logging.getLogger(__name__)
@@ -211,3 +216,30 @@ def setup_output_fp(
     final_output_fp = os.path.join(output_dir_fp, final_output_fn)
 
     return final_output_fp
+
+
+def merge_polygons_at_tile_boundary(input_polygons, tiles):
+
+    assert input_polygons.crs == tiles.crs
+    # Add a 1 pixel (30 m) buffer to the tiles boundary.
+    buffered_30m_tiles = tiles.boundary.buffer(30, cap_style="flat", join_style="mitre")
+    buffered_30m_tiles_gdf = gpd.GeoDataFrame(geometry=buffered_30m_tiles, crs=tiles.crs)
+
+    # Get the polygons at the tile boundaries.
+    boundary_polygons, _, not_boundary_polygons = filter_geodataframe_by_intersection(
+        input_polygons,
+        buffered_30m_tiles_gdf,
+        invert_mask=False,
+        return_inverse=True)
+
+    # Now combine overlapping polygons in boundary_polygons.
+    merged_boundary_polygons_geoms = shapely.ops.unary_union(boundary_polygons['geometry'])
+
+    # `Explode` the multipolygon back out into individual polygons.
+    merged_boundary_polygons = gpd.GeoDataFrame(crs=input_polygons.crs, geometry=[merged_boundary_polygons_geoms])
+    merged_boundary_polygons = merged_boundary_polygons.explode(index_parts=True).reset_index(drop=True)
+
+    # Then combine our merged_boundary_polygons with the not_boundary_polygons.
+    all_polygons = gpd.GeoDataFrame(pd.concat([not_boundary_polygons, merged_boundary_polygons], ignore_index=True, sort=True)).set_geometry('geometry')
+
+    return all_polygons
