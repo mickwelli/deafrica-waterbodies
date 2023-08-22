@@ -20,7 +20,7 @@ from datacube.utils.geometry import Geometry
 from deafrica_tools.spatial import xr_vectorize
 
 from .helpers import check_wetness_thresholds, setup_output_fp, assign_unique_ids, get_product_tiles, merge_polygons_at_tile_boundary
-from .filter import filter_waterbodies
+from .filters import filter_waterbodies
 
 
 _log = logging.getLogger(__name__)
