@@ -1,5 +1,6 @@
 import os
 import math
+import logging
 import numpy as np
 import geohash as gh
 import geopandas as gpd
@@ -159,7 +160,7 @@ def get_product_regions(
     """
     base_url = "https://explorer.digitalearth.africa/api/regions/"
     regions_url = f"{base_url}{product}"
-    
+
     regions = gpd.read_file(regions_url).drop('count', axis=1)
 
     return regions
