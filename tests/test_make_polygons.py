@@ -1,6 +1,6 @@
 import geopandas as gpd
 
-from deafrica_waterbodies.waterbodies.polygons import make_polygons
+from deafrica_waterbodies.waterbodies.polygons import make_polygons_
 
 GINNINDERRA_BBOX = 149.054596, -35.242293, 149.095430, -35.211391
 
@@ -14,7 +14,7 @@ def test_main(tmp_path):
     # but for now we'll use an actual datacube
     out_path = tmp_path / 'wb_outputs'
     out_path.mkdir()
-    make_polygons.main(bbox=GINNINDERRA_BBOX,
+    make_polygons_.main(bbox=GINNINDERRA_BBOX,
                        crs='EPSG:4326',
                        minimum_wet_percentage_detection=0.1,
                        minimum_wet_percentage_extent=0.05,
@@ -23,8 +23,8 @@ def test_main(tmp_path):
                        min_valid_observations=128,
                        apply_min_valid_observations_first=True,
                        urban_mask=True,
-                       sa3_urban_areas=make_polygons.DEFAULT_SA3_URBAN,
-                       sa3_filepath=make_polygons.URBAN_SA3_PATH,
+                       sa3_urban_areas=make_polygons_.DEFAULT_SA3_URBAN,
+                       sa3_filepath=make_polygons_.URBAN_SA3_PATH,
                        handle_large_polygons='nothing',
                        pp_thresh=0.005,
                        base_filename='waterbodies_test_main',
