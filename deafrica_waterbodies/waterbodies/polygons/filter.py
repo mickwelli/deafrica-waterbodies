@@ -1,3 +1,6 @@
+""" 
+Filter waterbody polygons based on different criteria.
+"""
 import math
 import logging
 import warnings
