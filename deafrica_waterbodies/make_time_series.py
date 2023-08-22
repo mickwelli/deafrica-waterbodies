@@ -27,7 +27,7 @@ import sys
 
 import click
 
-import dea_waterbodies
+import deafrica_waterbodies
 
 logging.getLogger("botocore.credentials").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
@@ -227,7 +227,7 @@ def get_shapes(config_dict: dict,
 @click.option('--wofls', default=None,
               help='Name of WOfLs product; default wofs_albers')
 @click.option('-v', '--verbose', count=True)
-@click.version_option(version=dea_waterbodies.__version__)
+@click.version_option(version=deafrica_waterbodies.__version__)
 def main(ids, config, shapefile, start, end, missing_only,
          time_span, output, state, no_mask_obs, all,
          from_queue, wofls, verbose):
@@ -365,7 +365,7 @@ def main(ids, config, shapefile, start, end, missing_only,
 
     # Do the import here so that the CLI is fast,
     # because this import is sloooow.
-    import dea_waterbodies.waterbody_timeseries_functions as dw_wtf
+    import deafrica_waterbodies.waterbody_timeseries_functions as dw_wtf
 
     # Get the CRS from the shapefile.
     crs = get_crs(config_dict['shape_file'])

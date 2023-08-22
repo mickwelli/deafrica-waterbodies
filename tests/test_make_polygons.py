@@ -1,6 +1,6 @@
 import geopandas as gpd
 
-from dea_waterbodies import make_polygons
+from deafrica_waterbodies import make_polygons
 
 GINNINDERRA_BBOX = 149.054596, -35.242293, 149.095430, -35.211391
 
