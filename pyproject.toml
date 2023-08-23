@@ -1,10 +1,9 @@
 [build-system]
-requires = ["setuptools", "setuptools-scm"]
+requires = ["read_version ~= 0.3.0","setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "deafrica-waterbodies"
-version = "0.0.1"
 description = "Digital Earth Africa Waterbodies"
 authors = [{name = "Digital Earth Africa", email = "systems@digitalearthafrica.org"}]
 maintainers = [{name = "Digital Earth Africa", email = "systems@digitalearthafrica.org"}]
@@ -44,6 +43,7 @@ dependencies = [
     # Testing
     'pytest',
 ]
+dynamic = ["version"]
 
 [project.urls]
 Homepage = "https://github.com/digitalearthafrica/deafrica-waterbodies"
@@ -55,6 +55,9 @@ deafrica-waterbodies="deafrica_waterbodies.cmd.cli:main"
 
 [tool.setuptools]
 packages = ["deafrica_waterbodies"]
+
+[tool.setuptools.dynamic]
+version = {attr = "deafrica_waterbodies.__version__"}
 
 [tool.pytest.ini_options]
 log_cli = true
