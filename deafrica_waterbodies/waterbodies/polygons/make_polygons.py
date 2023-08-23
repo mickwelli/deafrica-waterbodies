@@ -83,62 +83,71 @@ def get_polygons_using_thresholds(
     secondary_threshold_polygons_list = []
     for row in input_gdf.itertuples():
         row_id = row.Index
-        _log.info(f"Generating polygons for row: {row_id}")
+        _log.info(f"Generating polygons for tile: {row_id}")
         row_geom = Geometry(geom=row.geometry, crs=input_gdf.crs)
 
         # Update the datacube query with the row geometry.
         query.update(geopolygon=row_geom)
 
-        # Load the WOfS All-Time Summary of clear and wet observations.
-        wofs_alltime_summary = dc.load('wofs_ls_summary_alltime',
-                                       **query).squeeze()
+        try:
+            # Load the WOfS All-Time Summary of clear and wet observations.
+            wofs_alltime_summary = dc.load('wofs_ls_summary_alltime',
+                                           **query).squeeze()
 
-        # Set the no-data values to nan.
-        # Masking here is done using the frequency measurement because for multiple
-        # areas NaN values are present in the frequency measurement but the
-        # no data value -999 is not present in the count_clear and
-        # count_wet measurements.
-        # Note: it seems some pixels with NaN values in the frequency measurement
-        # have a value of zero in the count_clear and/or the count_wet measurements.
-        wofs_alltime_summary = wofs_alltime_summary.where(~np.isnan(wofs_alltime_summary.frequency))
+            # Set the no-data values to nan.
+            # Masking here is done using the frequency measurement because for multiple
+            # areas NaN values are present in the frequency measurement but the
+            # no data value -999 is not present in the count_clear and
+            # count_wet measurements.
+            # Note: it seems some pixels with NaN values in the frequency measurement
+            # have a value of zero in the count_clear and/or the count_wet measurements.
+            wofs_alltime_summary = wofs_alltime_summary.where(~np.isnan(wofs_alltime_summary.frequency))
 
-        # Mask pixels not observed at least min_valid_observations times.
-        wofs_alltime_summary_valid_clear_count = wofs_alltime_summary.count_clear >= min_valid_observations
+            # Mask pixels not observed at least min_valid_observations times.
+            wofs_alltime_summary_valid_clear_count = wofs_alltime_summary.count_clear >= min_valid_observations
 
-        # Generate the polygons.
-        row_polygons = {}
-        for threshold in minimum_wet_thresholds:
-            # Mask any pixels whose frequency of water detection is less than the threshold.
-            wofs_alltime_summary_valid_wetness = wofs_alltime_summary.frequency > threshold
+            # Generate the polygons.
+            row_polygons = {}
+            for threshold in minimum_wet_thresholds:
+                # Mask any pixels whose frequency of water detection is less than the threshold.
+                wofs_alltime_summary_valid_wetness = wofs_alltime_summary.frequency > threshold
 
-            # Now find pixels that meet both the minimum valid observations
-            # and minimum wet threshold criteria.
-            wofs_alltime_summary_valid = wofs_alltime_summary_valid_wetness.where(wofs_alltime_summary_valid_wetness & wofs_alltime_summary_valid_clear_count)
+                # Now find pixels that meet both the minimum valid observations
+                # and minimum wet threshold criteria.
+                wofs_alltime_summary_valid = wofs_alltime_summary_valid_wetness.where(wofs_alltime_summary_valid_wetness & wofs_alltime_summary_valid_clear_count)
 
-            # Convert the raster to polygons.
-            # We use a mask of '1' to only generate polygons around values of '1' (not NaNs).
-            polygons_mask = wofs_alltime_summary_valid == 1
+                # Convert the raster to polygons.
+                # We use a mask of '1' to only generate polygons around values of '1' (not NaNs).
+                polygons_mask = wofs_alltime_summary_valid == 1
 
-            polygons = xr_vectorize(wofs_alltime_summary_valid,
-                                    mask=polygons_mask,
-                                    crs=wofs_alltime_summary.geobox.crs,
-                                    transform=wofs_alltime_summary.geobox.transform)
+                polygons = xr_vectorize(wofs_alltime_summary_valid,
+                                        mask=polygons_mask,
+                                        crs=wofs_alltime_summary.geobox.crs,
+                                        transform=wofs_alltime_summary.geobox.transform)
 
-            # Combine any overlapping polygons.
-            merged_polygon_geoms = shapely.ops.unary_union(polygons['geometry'])
+                # Combine any overlapping polygons.
+                merged_polygon_geoms = shapely.ops.unary_union(polygons['geometry'])
 
-            # Turn the combined multipolygon back into a GeoDataFrame.
-            merged_polygons = gpd.GeoDataFrame(geometry=list(merged_polygon_geoms.geoms))
+                # Turn the combined multipolygon back into a GeoDataFrame.
+                try:
+                    merged_polygons = gpd.GeoDataFrame(geometry=list(merged_polygon_geoms.geoms))
+                except AttributeError:
+                    merged_polygons = gpd.GeoDataFrame(geometry=[merged_polygon_geoms])
 
-            # We need to add the crs back onto the GeoDataFrame.
-            merged_polygons.crs = wofs_alltime_summary.geobox.crs
+                # We need to add the crs back onto the GeoDataFrame.
+                merged_polygons.crs = wofs_alltime_summary.geobox.crs
 
-            row_polygons[threshold] = merged_polygons
+                row_polygons[threshold] = merged_polygons
 
-        # Append the row's waterbody polygons to the list.
-        primary_threshold_polygons_list.append(row_polygons[primary_threshold])
-        secondary_threshold_polygons_list.append(row_polygons[secondary_threshold])
-
+            # Append the row's waterbody polygons to the list.
+            primary_threshold_polygons_list.append(row_polygons[primary_threshold])
+            secondary_threshold_polygons_list.append(row_polygons[secondary_threshold])
+        except Exception as e:
+            print(
+                f'\nTile {row_id} did not run. \n'
+                f'Error {e} encountered.'
+                'This is probably because there are no waterbodies present in this tile.'
+            )
     primary_threshold_polygons = pd.concat(primary_threshold_polygons_list)
     secondary_threshold_polygons = pd.concat(secondary_threshold_polygons_list)
 
