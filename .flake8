@@ -1,0 +1,4 @@
+[flake8]
+per-file-ignores = deafrica_waterbodies/cmd/cli.py:F401
+
+max_line_length = 120
