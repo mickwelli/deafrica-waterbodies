@@ -134,8 +134,6 @@ def waterbodies_from_bbox(bbox,
     aoi_gdf = aoi_gdf.to_crs(output_crs)
     continental_run = False
 
-
-
     get_waterbodies(
         aoi_gdf=aoi_gdf,
         continental_run=continental_run,

@@ -1,7 +1,6 @@
 import os
 import math
 import click
-import shapely
 import geopandas as gpd
 
 from .common import main, logging_setup
@@ -100,7 +99,8 @@ def waterbodies_from_vector_file(
     verbose,
     ouptut_folder,
     output_base_filename,
-    output_file_type,):
+    output_file_type,
+):
 
     logging_setup(verbose)
 
