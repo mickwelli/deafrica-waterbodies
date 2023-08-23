@@ -6,6 +6,7 @@ dependencies:
   - gdal = 3.6.3 
   - pip:
     - --extra-index-url="https://packages.dea.ga.gov.au"
+    - pip-tools
     - numpy
     - pandas 
     - geopandas
