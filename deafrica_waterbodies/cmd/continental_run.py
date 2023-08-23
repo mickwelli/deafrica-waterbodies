@@ -9,7 +9,9 @@ from .common import main, logging_setup
 from deafrica_waterbodies.waterbodies.polygons.make_polygons import get_waterbodies
 
 
-@main.command("waterbodies-continental-run", no_args_is_help=True)
+@main.command("waterbodies-continental-run", 
+              short_help="Waterbodies for all of Africa.",
+              no_args_is_help=True)
 @click.option("--primary-threshold",
               default=0.1,
               type=click.FLOAT,
@@ -98,6 +100,9 @@ def waterbodies_continental_run(
     ouptut_folder,
     output_base_filename,
     output_file_type,):
+    """
+    Generate waterbodies for all the WOfS All Time Summary regions.
+    """
 
     logging_setup(verbose)
 

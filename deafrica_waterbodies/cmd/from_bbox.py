@@ -9,7 +9,9 @@ from .common import main, logging_setup
 from deafrica_waterbodies.waterbodies.polygons.make_polygons import get_waterbodies
 
 
-@main.command("waterbodies-from-boundingbox", no_args_is_help=True)
+@main.command("waterbodies-from-boundingbox", 
+              short_help="Waterbodies for area defined by bounding box.",
+              no_args_is_help=True)
 @click.option("--bbox",
               help="Coordinates of the area of interest's bounding box in the format 'minx,miny,maxx,maxy'.")
 @click.option("--bbox-crs",
@@ -106,6 +108,9 @@ def waterbodies_from_bbox(bbox,
                           output_base_filename,
                           output_file_type,
                           ):
+    """ 
+    Generate waterbodies for WOfS All Time Summary regions covering the area defined in the provided bounding box.
+    """
     logging_setup(verbose)
 
     if remove_ocean_polygons:

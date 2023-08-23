@@ -8,7 +8,9 @@ from .common import main, logging_setup
 from deafrica_waterbodies.waterbodies.polygons.make_polygons import get_waterbodies
 
 
-@main.command("waterbodies-from-vector-file", no_args_is_help=True)
+@main.command("waterbodies-from-vector-file", 
+              short_help="Waterbodies for area defined in vector file.",
+              no_args_is_help=True)
 @click.option("--vector-file-fp",
               help="The path to a vector defining the area of interest.")
 @click.option("--primary-threshold",
@@ -101,6 +103,9 @@ def waterbodies_from_vector_file(
     output_base_filename,
     output_file_type,
 ):
+    """ 
+    Generate waterbodies for WOfS All Time Summary regions covering the area defined in the provided vector file.
+    """
 
     logging_setup(verbose)
 
