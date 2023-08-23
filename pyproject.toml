@@ -1,68 +1,60 @@
 [build-system]
-#requires = ["setuptools", "setuptools-scm"]
-#build-backend = "setuptools.build_meta"
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
 
-[tool.poetry]
+[project]
 name = "deafrica-waterbodies"
 version = "0.0.1"
 description = "Digital Earth Africa Waterbodies"
+authors = [{name = "Digital Earth Africa", email = "systems@digitalearthafrica.org"}]
+maintainers = [{name = "Digital Earth Africa", email = "systems@digitalearthafrica.org"}]
+readme = {file = "README.rst", content-type = "text/x-rst"}
 # If you change the License, remember to change the Trove Classifier!
-license ="Apache-2.0"
-authors = ["Digital Earth Africa <systems@digitalearthafrica.org>"]
-maintainers = ["Digital Earth Africa <systems@digitalearthafrica.org>"]
-readme = "README.rst"
-homepage = "https://github.com/digitalearthafrica/deafrica-waterbodies"
-repository = "https://github.com/digitalearthafrica/deafrica-waterbodies"
-documentation = "https://github.com/digitalearthafrica/deafrica-waterbodies#readme"
+license = {file = "LICENSE"}
 classifiers=[
-        # Trove classifiers
-        # Full list: https://pypi.org/classifiers/
-        "Intended Audience :: Science/Research",
-        "Topic :: Scientific/Engineering :: GIS",
-        "Topic :: Scientific/Engineering :: Hydrology",
-    ]
-packages = [
-    { include = "deafrica_waterbodies" },
+    # Trove classifiers
+    # Full list: https://pypi.python.org/pypi?%3Aaction=list_classifiers
+    'License :: OSI Approved :: Apache Software License',
+    'Programming Language :: Python',
+    'Programming Language :: Python :: 3',
+    'Programming Language :: Python :: 3.9',
+    'Programming Language :: Python :: 3.10',
+    'Programming Language :: Python :: 3.11',
+    'Intended Audience :: Science/Research',
+    'Topic :: Scientific/Engineering :: GIS',
+    'Topic :: Scientific/Engineering :: Hydrology',
 ]
-exclude = ["tests", "*.tests", "*.tests.*", "tests.*",  "test", "*.test", "*.test.*", "test.*"] 
+requires-python = ">=3.9.0"
+dependencies = [
+    'numpy',
+    'pandas',
+    'geopandas',
+    'python-geohash',
+    'datacube',
+    'shapely',
+    'click',
+    'fsspec',
+    'boto3',
+    'botocore',
+    'rasterio',
+    'deafrica-tools >= 2.0.3',
+    # Code style
+    'flake8',
+    'black', 
+    # Testing
+    'pytest',
+]
 
+[project.urls]
+Homepage = "https://github.com/digitalearthafrica/deafrica-waterbodies"
+Repository = "https://github.com/digitalearthafrica/deafrica-waterbodies"
+Documentation = "https://github.com/digitalearthafrica/deafrica-waterbodies#readme"
 
-[tool.poetry.dependencies]
-python = ">=3.9,<3.12"
-datacube = "^1.8.15"
-geopandas = "^0.13.2"
-fsspec = "^2023.6.0"
-numpy = "^1.25.2"
-python-geohash = "^0.8.5"
-rioxarray = "^0.15.0"
-rasterstats = "^0.19.0"
-boto3 = ">=1.24.59"
-s3fs = "^2023.6.0"
-flake8 = "^6.1.0"
-moto = "^4.1.15"
-numba = ">=0.57.0" # Fixes issues with deafrica-tools dependecy dask-ml
-deafrica-tools = ">=2.0.3"
-
-
-[[tool.poetry.source]]
-name = "PyPI"
-priority = "default"
-
-
-[[tool.poetry.source]]
-name = "packages.dea.ga.gov.au"
-url = "https://packages.dea.ga.gov.au"
-priority = "supplemental"
-
-
-[tool.poetry.plugins]
-
-[tool.poetry.plugins."poetry.application.plugin"]
-#export = "poetry_plugin_export.plugins:ExportApplicationPlugin"
+[project.scripts]
 deafrica-waterbodies="deafrica_waterbodies.cmd.cli:main"
 
+[tool.setuptools]
+packages = ["deafrica_waterbodies"]
 
 [tool.pytest.ini_options]
 log_cli = true
