@@ -9,13 +9,9 @@ from .common import main, logging_setup
 from deafrica_waterbodies.waterbodies.polygons.make_polygons import get_waterbodies
 
 
-@main.command("waterbodies-from-boundingbox", no_args_is_help=True)
-@click.option("--bbox",
-              help="Coordinates of the area of interest's bounding box in the format 'minx,miny,maxx,maxy'.")
-@click.option("--bbox-crs",
-              default="EPSG:4326",
-              help="CRS of the bounding box coordinates.",
-              show_default=True)
+@main.command("waterbodies-from-vector-file", no_args_is_help=True)
+@click.option("--vector-file-fp",
+              help="The path to a vector defining the area of interest.")
 @click.option("--primary-threshold",
               default=0.1,
               type=click.FLOAT,
@@ -87,25 +83,25 @@ from deafrica_waterbodies.waterbodies.polygons.make_polygons import get_waterbod
               show_default=True,
               help="File type for the outputs waterbodies.",
               type=click.Choice(['GeoJSON', 'Shapefile'], case_sensitive=False))
-def waterbodies_from_bbox(bbox,
-                          bbox_crs,
-                          secondary_threshold,
-                          primary_threshold,
-                          min_polygon_size,
-                          max_polygon_size,
-                          remove_ocean_polygons,
-                          land_sea_mask_fp,
-                          remove_major_rivers,
-                          major_rivers_mask_fp,
-                          remove_cbd,
-                          urban_mask_fp,
-                          handle_large_polygons,
-                          pp_test_threshold,
-                          verbose,
-                          ouptut_folder,
-                          output_base_filename,
-                          output_file_type,
-                          ):
+def waterbodies_from_vector_file(
+    vector_file_fp,
+    primary_threshold,
+    secondary_threshold,
+    min_polygon_size,
+    max_polygon_size,
+    remove_ocean_polygons,
+    land_sea_mask_fp,
+    remove_major_rivers,
+    major_rivers_mask_fp,
+    remove_cbd,
+    urban_mask_fp,
+    handle_large_polygons,
+    pp_test_threshold,
+    verbose,
+    ouptut_folder,
+    output_base_filename,
+    output_file_type,):
+
     logging_setup(verbose)
 
     if remove_ocean_polygons:
@@ -128,13 +124,12 @@ def waterbodies_from_bbox(bbox,
     output_crs = "EPSG:6933"
     min_valid_observations = 128
 
-    # Convert bounding box to GeoDataFrame.
-    bbox_ = [float(i.strip()) for i in bbox.split(",")]
-    aoi_gdf = gpd.GeoDataFrame(geometry=[shapely.geometry.box(*bbox_)], crs=bbox_crs)
-    aoi_gdf = aoi_gdf.to_crs(output_crs)
+    # Read the vector file.
+    try:
+        aoi_gdf = gpd.read_file(vector_file_fp).to_crs(output_crs)
+    except Exception as e:
+        raise e
     continental_run = False
-
-
 
     get_waterbodies(
         aoi_gdf=aoi_gdf,
