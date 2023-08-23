@@ -233,3 +233,4 @@ def get_waterbodies(
     # Reproject to EPSG:4326
     filtered_polygons_with_unique_ids = filtered_polygons_with_unique_ids.to_crs("EPSG:4326")
     filtered_polygons_with_unique_ids.to_file(final_output_fp, driver=output_file_type)
+    _log.info(f"Waterbodies written to {final_output_fp}")

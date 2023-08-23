@@ -211,6 +211,7 @@ def setup_output_fp(
 
     if not os.path.exists(output_dir_fp):
         os.makedirs(output_dir_fp)
+        print(f"Output folder {output_dir_fp} created.")
 
     final_output_fn = f"{output_base_filename}{output_file_extension}"
     final_output_fp = os.path.join(output_dir_fp, final_output_fn)
