@@ -1,17 +1,27 @@
 import os
 import math
 import click
-import shapely
+import logging
 import geopandas as gpd
 
-from .common import main, logging_setup
+from .main import main, command_required_option_from_option
+from .log import logging_setup
+from .io import setup_output_fp
 
 from deafrica_waterbodies.waterbodies.polygons.make_polygons import get_waterbodies
 
+required_options = {
+    True: 'ouptut_bucket_name',
+    False: 'output_local_folder',
+}
 
-@main.command("waterbodies-continental-run", 
-              short_help="Waterbodies for all of Africa.",
-              no_args_is_help=True)
+
+@main.command("waterbodies-from-vector-file",
+              short_help="Waterbodies for area defined in vector file.",
+              no_args_is_help=True,
+              cls=command_required_option_from_option('s3', required_options))
+@click.option("--vector-file-fp",
+              help="The path to a vector defining the area of interest.")
 @click.option("--primary-threshold",
               default=0.1,
               type=click.FLOAT,
@@ -68,13 +78,31 @@ from deafrica_waterbodies.waterbodies.polygons.make_polygons import get_waterbod
               default=0.005,
               show_default=True,
               help="Polsby–Popper test value to use to split large polygons.")
-@click.option("-v", "--verbose", count=True)
-@click.option("--ouptut-folder",
+@click.option("-v", "--verbose",
+              count=True)
+@click.option("--product-version",
+              type=str,
+              default="0.0.1",
+              show_default=True,
+              help="Product version for the DE Africa Waterbodies product.")
+@click.option("--s3/--local",
+              default=False,
+              help="Save the output to an s3 bucket or a local folder.")
+@click.option("--ouptut-bucket-name",
+              type=str,
+              default="deafrica-waterbodies-dev",
+              show_default=True,
+              required=False,
+              is_eager=True,
+              help="The s3 bucket to write the output to.",)
+@click.option("--ouptut-local-folder",
               type=click.Path(),
               default=os.getcwd(),
               show_default="Current working directory.",
+              required=False,
+              is_eager=True,
               help="Directory to write the waterbody polygons to.",)
-@click.option("--output-base-filename",
+@click.option("--output-file-name",
               default="waterbodies",
               show_default=True,
               help="File name for the output waterbodies.")
@@ -83,7 +111,8 @@ from deafrica_waterbodies.waterbodies.polygons.make_polygons import get_waterbod
               show_default=True,
               help="File type for the outputs waterbodies.",
               type=click.Choice(['GeoJSON', 'Shapefile'], case_sensitive=False))
-def waterbodies_continental_run(
+def waterbodies_from_vector_file(
+    vector_file_fp,
     primary_threshold,
     secondary_threshold,
     min_polygon_size,
@@ -97,14 +126,28 @@ def waterbodies_continental_run(
     handle_large_polygons,
     pp_test_threshold,
     verbose,
-    ouptut_folder,
-    output_base_filename,
-    output_file_type,):
+    product_version,
+    s3,
+    output_bucket_name,
+    output_local_folder,
+    output_file_name,
+    output_file_type,
+):
     """
-    Generate waterbodies for all the WOfS All Time Summary regions.
+    Generate waterbodies for WOfS All Time Summary regions covering the area defined in the provided vector file.
     """
 
     logging_setup(verbose)
+    _log = logging.getLogger(__name__)
+
+    output_fp, log_msg = setup_output_fp(
+        product_version,
+        s3,
+        output_bucket_name,
+        output_local_folder,
+        output_file_name,
+        output_file_type)
+    _log.info(log_msg)
 
     if remove_ocean_polygons:
         filter_out_ocean_polygons = True
@@ -126,10 +169,14 @@ def waterbodies_continental_run(
     output_crs = "EPSG:6933"
     min_valid_observations = 128
 
-    aoi_gdf = None
-    continental_run = True
+    # Read the vector file.
+    try:
+        aoi_gdf = gpd.read_file(vector_file_fp).to_crs(output_crs)
+    except Exception as e:
+        raise e
+    continental_run = False
 
-    get_waterbodies(
+    waterbodies_gdf = get_waterbodies(
         aoi_gdf=aoi_gdf,
         continental_run=continental_run,
         dask_chunks=dask_chunks,
@@ -147,7 +194,19 @@ def waterbodies_continental_run(
         filter_out_urban_polygons=filter_out_urban_polygons,
         urban_mask_fp=urban_mask_fp,
         handle_large_polygons=handle_large_polygons,
-        pp_test_threshold=pp_test_threshold,
-        ouptut_folder=ouptut_folder,
-        output_base_filename=output_base_filename,
-        output_file_type=output_file_type)
+        pp_test_threshold=pp_test_threshold
+        )
+
+    # Reproject to EPSG:4326
+    waterbodies_gdf_4326 = waterbodies_gdf.to_crs("EPSG:4326")
+
+    _log.info(f"Writing waterbodies to {output_fp} ...")
+    try:
+        # If writing to s3 bucket, 
+        # if user has write access to bucket this should work.
+        waterbodies_gdf_4326.to_file(output_fp)
+        _log.info("Done.")
+    except Exception as error:
+        _log.error(error)
+        raise
+    

@@ -2,8 +2,6 @@ import sys
 import click
 import logging
 
-import deafrica_waterbodies.__version__
-
 
 def logging_setup(verbose: int = 1):
     """
@@ -56,9 +54,3 @@ def setup_logging(verbose: int):
             raise click.ClickException("Maximum verbosity is -vv")
         logger.addHandler(stdout_hdlr)
         logger.propagate = False
-
-
-@click.version_option(package_name="deafrica_waterbodies", version=deafrica_waterbodies.__version__)
-@click.group(help="Run deafrica-waterbodies.")
-def main():
-    pass
