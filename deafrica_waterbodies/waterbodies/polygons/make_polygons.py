@@ -46,8 +46,9 @@ def get_product_regions(product: str):
         regions = gpd.read_file(regions_url).drop('count', axis=1)
         regions.set_index("region_code", inplace=True)
         return regions
-    except Exception as e:
-        raise e
+    except Exception as error:
+        _log.error(error)
+        raise
 
 
 def get_product_tiles(product="wofs_ls_summary_alltime", aoi_gdf=None):
@@ -225,10 +226,10 @@ def get_polygons_using_thresholds(
             # Append the row's waterbody polygons to the list.
             primary_threshold_polygons_list.append(row_polygons[primary_threshold])
             secondary_threshold_polygons_list.append(row_polygons[secondary_threshold])
-        except Exception as e:
-            _log.info(
+        except Exception as error:
+            _log.error(error)
+            _log.error(
                 f'\nTile {row_id} did not run. \n'
-                f'Error {e} encountered.'
                 'This is probably because there are no waterbodies present in this tile.'
             )
     primary_threshold_polygons = pd.concat(primary_threshold_polygons_list)
