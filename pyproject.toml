@@ -51,7 +51,7 @@ Repository = "https://github.com/digitalearthafrica/deafrica-waterbodies"
 Documentation = "https://github.com/digitalearthafrica/deafrica-waterbodies#readme"
 
 [project.scripts]
-deafrica-waterbodies="deafrica_waterbodies.cmd.cli:main"
+deafrica-waterbodies="deafrica_waterbodies.cli.main:main"
 
 [tool.setuptools]
 packages = ["deafrica_waterbodies"]
