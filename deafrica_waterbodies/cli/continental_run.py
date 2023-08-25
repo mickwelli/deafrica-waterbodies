@@ -3,15 +3,15 @@ import math
 import click
 import logging
 
-from .main import main
 from .log import logging_setup
 from .io import setup_output_fp
+from .group_options import MutuallyExclusiveOption
 
 from deafrica_waterbodies.waterbodies.polygons.attributes import add_attributes
 from deafrica_waterbodies.waterbodies.polygons.make_polygons import get_waterbodies
 
 
-@main.command("waterbodies-continental-run",
+@click.command("waterbodies-continental-run",
               short_help="Waterbodies for all of Africa.",
               no_args_is_help=True)
 @click.option("--primary-threshold",
@@ -76,23 +76,26 @@ from deafrica_waterbodies.waterbodies.polygons.make_polygons import get_waterbod
               default="0.0.1",
               show_default=True,
               help="Product version for the DE Africa Waterbodies product.")
-@click.option("--s3/--local",
-              default=False,
-              help="Save the output to an s3 bucket or a local folder.")
-@click.option("--ouptut-bucket-name",
+@click.option("--s3",
+              "storage_location",
+              flag_value="s3",
+              help="Save the output to an s3 bucket.")
+@click.option("--local",
+              "storage_location",
+              flag_value="local",
+              default=True,
+              help="Save the output to a local folder.")
+@click.option("--output-bucket-name",
               type=str,
-              default="deafrica-waterbodies-dev",
               show_default=True,
-              required=False,
-              is_eager=True,
+              cls=MutuallyExclusiveOption,
+              mutually_exclusive=["output_local_folder"],
               help="The s3 bucket to write the output to.",)
-@click.option("--ouptut-local-folder",
+@click.option("--output-local-folder",
               type=click.Path(),
-              default=os.getcwd(),
-              show_default="Current working directory.",
-              required=False,
-              is_eager=True,
-              help="Directory to write the waterbody polygons to.",)
+              cls=MutuallyExclusiveOption,
+              mutually_exclusive=["output_bucket_name"],
+              help="Local directory to write the waterbody polygons to.",)
 @click.option("--output-file-name",
               default="waterbodies",
               show_default=True,
@@ -117,7 +120,7 @@ def waterbodies_continental_run(
     pp_test_threshold,
     verbose,
     product_version,
-    s3,
+    storage_location,
     output_bucket_name,
     output_local_folder,
     output_file_name,
@@ -129,14 +132,13 @@ def waterbodies_continental_run(
     logging_setup(verbose)
     _log = logging.getLogger(__name__)
 
-    output_fp, log_msg = setup_output_fp(
+    output_fp = setup_output_fp(
         product_version,
-        s3,
+        storage_location,
         output_bucket_name,
         output_local_folder,
         output_file_name,
         output_file_type)
-    _log.info(log_msg)
 
     if remove_ocean_polygons:
         filter_out_ocean_polygons = True

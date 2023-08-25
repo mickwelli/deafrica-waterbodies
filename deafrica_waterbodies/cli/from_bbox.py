@@ -1,18 +1,19 @@
 import os
 import math
-import logging
 import click
+import logging
 import shapely
 import geopandas as gpd
 
-from .main import main, logging_setup
+from .log import logging_setup
 from .io import setup_output_fp
+from .group_options import MutuallyExclusiveOption
 
 from deafrica_waterbodies.waterbodies.polygons.attributes import add_attributes
 from deafrica_waterbodies.waterbodies.polygons.make_polygons import get_waterbodies
 
 
-@main.command("waterbodies-from-boundingbox",
+@click.command("waterbodies-from-boundingbox",
               short_help="Waterbodies for area defined by bounding box.",
               no_args_is_help=True)
 @click.option("--bbox",
@@ -83,23 +84,26 @@ from deafrica_waterbodies.waterbodies.polygons.make_polygons import get_waterbod
               default="0.0.1",
               show_default=True,
               help="Product version for the DE Africa Waterbodies product.")
-@click.option("--s3/--local",
-              default=False,
-              help="Save the output to an s3 bucket or a local folder.")
-@click.option("--ouptut-bucket-name",
+@click.option("--s3",
+              "storage_location",
+              flag_value="s3",
+              help="Save the output to an s3 bucket.")
+@click.option("--local",
+              "storage_location",
+              flag_value="local",
+              default=True,
+              help="Save the output to a local folder.")
+@click.option("--output-bucket-name",
               type=str,
-              default="deafrica-waterbodies-dev",
               show_default=True,
-              required=False,
-              is_eager=True,
+              cls=MutuallyExclusiveOption,
+              mutually_exclusive=["output_local_folder"],
               help="The s3 bucket to write the output to.",)
-@click.option("--ouptut-local-folder",
+@click.option("--output-local-folder",
               type=click.Path(),
-              default=os.getcwd(),
-              show_default="Current working directory.",
-              required=False,
-              is_eager=True,
-              help="Directory to write the waterbody polygons to.",)
+              cls=MutuallyExclusiveOption,
+              mutually_exclusive=["output_bucket_name"],
+              help="Local directory to write the waterbody polygons to.",)
 @click.option("--output-file-name",
               default="waterbodies",
               show_default=True,
@@ -125,7 +129,7 @@ def waterbodies_from_bbox(bbox,
                           pp_test_threshold,
                           verbose,
                           product_version,
-                          s3,
+                          storage_location,
                           output_bucket_name,
                           output_local_folder,
                           output_file_name,
@@ -137,14 +141,13 @@ def waterbodies_from_bbox(bbox,
     logging_setup(verbose)
     _log = logging.getLogger(__name__)
 
-    output_fp, log_msg = setup_output_fp(
+    output_fp = setup_output_fp(
         product_version,
-        s3,
+        storage_location,
         output_bucket_name,
         output_local_folder,
         output_file_name,
         output_file_type)
-    _log.info(log_msg)
 
     if remove_ocean_polygons:
         filter_out_ocean_polygons = True
