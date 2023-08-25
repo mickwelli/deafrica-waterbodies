@@ -73,7 +73,7 @@ def get_product_tiles(product="wofs_ls_summary_alltime", aoi_gdf=None):
     regions = get_product_regions(product=product)
 
     if aoi_gdf is None:
-        print(f"Getting all {product} regions...")
+        _log.info(f"Getting all {product} regions...")
         tiles = regions
     else:
         # Reproject the regions to match the area of interest.
@@ -85,7 +85,7 @@ def get_product_tiles(product="wofs_ls_summary_alltime", aoi_gdf=None):
                                                        filtertype="intersects",
                                                        invert_mask=False,
                                                        return_inverse=False)
-    print(f"{len(tiles)} {product} tiles found.")
+    _log.info(f"{len(tiles)} {product} tiles found.")
     return tiles
 
 
