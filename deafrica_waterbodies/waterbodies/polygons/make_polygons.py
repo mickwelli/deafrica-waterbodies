@@ -8,7 +8,6 @@ Geoscience Australia - 2021
 """
 
 import datacube
-import os
 import math
 import logging
 import shapely
@@ -19,7 +18,7 @@ import geopandas as gpd
 from datacube.utils.geometry import Geometry
 from deafrica_tools.spatial import xr_vectorize
 
-from .helpers import check_wetness_thresholds, setup_output_fp, assign_unique_ids, get_product_tiles, merge_polygons_at_tile_boundary
+from .helpers import check_wetness_thresholds, assign_unique_ids, get_product_tiles, merge_polygons_at_tile_boundary
 from .filters import filter_waterbodies
 
 
@@ -143,7 +142,7 @@ def get_polygons_using_thresholds(
             primary_threshold_polygons_list.append(row_polygons[primary_threshold])
             secondary_threshold_polygons_list.append(row_polygons[secondary_threshold])
         except Exception as e:
-            print(
+            _log.info(
                 f'\nTile {row_id} did not run. \n'
                 f'Error {e} encountered.'
                 'This is probably because there are no waterbodies present in this tile.'
@@ -173,9 +172,6 @@ def get_waterbodies(
         urban_mask_fp: str = None,
         handle_large_polygons: str = "nothing",
         pp_test_threshold: float = 0.005,
-        ouptut_folder: str = os.getcwd(),
-        output_base_filename: str = "waterbodies",
-        output_file_type: str = "GeoJSON",
 ):
     # Check if this is a continental run.
     if aoi_gdf is None and continental_run:
@@ -184,12 +180,6 @@ def get_waterbodies(
         raise ValueError("If setting an area of interest, set `continental_run=False`")
     elif aoi_gdf is not None and not continental_run:
         _log.info("Running for the WOfS All Time Summary tiles covering the defined area of interest...")
-
-    # Set up some file names for outputs
-    _log.info("Setting up output directory")
-    final_output_fp = setup_output_fp(ouptut_folder=ouptut_folder,
-                                      output_base_filename=output_base_filename,
-                                      output_file_type=output_file_type)
 
     # Get the tiles covering the area of interest.
     _log.info("Loading tiles..")
@@ -229,8 +219,4 @@ def get_waterbodies(
     _log.info("Assigning unique ids to each polygon....")
     filtered_polygons_with_unique_ids = assign_unique_ids(filtered_polygons)
 
-    _log.info("Writing waterbodies to disk...")
-    # Reproject to EPSG:4326
-    filtered_polygons_with_unique_ids = filtered_polygons_with_unique_ids.to_crs("EPSG:4326")
-    filtered_polygons_with_unique_ids.to_file(final_output_fp, driver=output_file_type)
-    _log.info(f"Waterbodies written to {final_output_fp}")
+    return filtered_polygons_with_unique_ids
