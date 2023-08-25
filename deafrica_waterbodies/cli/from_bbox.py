@@ -8,6 +8,7 @@ import geopandas as gpd
 from .main import main, logging_setup
 from .io import setup_output_fp
 
+from deafrica_waterbodies.waterbodies.polygons.attributes import add_attributes
 from deafrica_waterbodies.waterbodies.polygons.make_polygons import get_waterbodies
 
 
@@ -193,7 +194,9 @@ def waterbodies_from_bbox(bbox,
         )
 
     # Reproject to EPSG:4326
-    waterbodies_gdf_4326 = waterbodies_gdf.to_crs("EPSG:4326")
+    waterbodies_gdf_4326 = add_attributes(waterbodies_gdf,
+                                          timeseries_output_bucket=output_bucket_name,
+                                          timeseries_product_version=product_version)
 
     _log.info(f"Writing waterbodies to {output_fp} ...")
     try:
