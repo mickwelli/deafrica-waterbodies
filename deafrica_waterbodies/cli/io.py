@@ -15,14 +15,18 @@ def setup_output_fp(
         output_file_name,
         output_file_type):
 
-    valid_output_file_type = ["GeoJSON", "Shapefile"]
-    if output_file_type not in valid_output_file_type:
-        raise ValueError(f"{output_file_type} is not implemented. Please select from {valid_output_file_type}.")
-    else:
+    # Validate output file type.
+    valid_output_file_type = ['GeoJSON', 'Shapefile']
+    try:
         if output_file_type == "GeoJSON":
             output_file_extension = ".geojson"
-        else:
+        elif output_file_type == "Shapefile":
             output_file_extension = ".shp"
+        else:
+            raise ValueError(f"{output_file_type} is not implemented. Please select from {valid_output_file_type}.")
+    except Exception as error:
+        _log.error(error)
+        raise
 
     object_prefix = f'{product_version.replace(".", "-")}/shapefile/'
     object_name = f"{output_file_name}{output_file_extension}"

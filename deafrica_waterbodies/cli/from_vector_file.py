@@ -172,8 +172,9 @@ def waterbodies_from_vector_file(
     # Read the vector file.
     try:
         aoi_gdf = gpd.read_file(vector_file_fp).to_crs(output_crs)
-    except Exception as e:
-        raise e
+    except Exception as error:
+        _log.error(error)
+        raise
     continental_run = False
 
     waterbodies_gdf = get_waterbodies(
@@ -202,11 +203,10 @@ def waterbodies_from_vector_file(
 
     _log.info(f"Writing waterbodies to {output_fp} ...")
     try:
-        # If writing to s3 bucket, 
+        # If writing to s3 bucket,
         # if user has write access to bucket this should work.
         waterbodies_gdf_4326.to_file(output_fp)
         _log.info("Done.")
     except Exception as error:
         _log.error(error)
         raise
-    

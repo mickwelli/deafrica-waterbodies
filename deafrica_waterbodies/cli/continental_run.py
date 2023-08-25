@@ -2,8 +2,6 @@ import os
 import math
 import click
 import logging
-import shapely
-import geopandas as gpd
 
 from .main import main
 from .log import logging_setup
@@ -188,7 +186,7 @@ def waterbodies_continental_run(
 
     _log.info(f"Writing waterbodies to {output_fp} ...")
     try:
-        # If writing to s3 bucket, 
+        # If writing to s3 bucket,
         # if user has write access to bucket this should work.
         waterbodies_gdf_4326.to_file(output_fp)
         _log.info("Done.")

@@ -6,11 +6,12 @@ import shapely
 import geopandas as gpd
 
 from .main import main, logging_setup
+from .io import setup_output_fp
 
 from deafrica_waterbodies.waterbodies.polygons.make_polygons import get_waterbodies
 
 
-@main.command("waterbodies-from-boundingbox", 
+@main.command("waterbodies-from-boundingbox",
               short_help="Waterbodies for area defined by bounding box.",
               no_args_is_help=True)
 @click.option("--bbox",
@@ -196,7 +197,7 @@ def waterbodies_from_bbox(bbox,
 
     _log.info(f"Writing waterbodies to {output_fp} ...")
     try:
-        # If writing to s3 bucket, 
+        # If writing to s3 bucket,
         # if user has write access to bucket this should work.
         waterbodies_gdf_4326.to_file(output_fp)
         _log.info("Done.")
