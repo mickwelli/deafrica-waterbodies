@@ -1,4 +1,4 @@
-""" 
+"""
 Filter waterbody polygons based on different criteria.
 """
 import math
@@ -8,9 +8,99 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 
-from .helpers import pp_test_gdf, filter_geodataframe_by_intersection
-
 _log = logging.getLogger(__name__)
+
+
+def filter_geodataframe_by_intersection(gpd_data,
+                                        gpd_filter,
+                                        filtertype="intersects",
+                                        invert_mask=True,
+                                        return_inverse=False):
+    """
+    Filter out polygons that intersect with another polygon shapefile.
+
+    Parameters
+    ----------
+    gpd_data: geopandas GeoDataFrame
+        Polygon data to be filtered.
+    gpd_filter: geopandas GeoDataFrame
+        Polygon dataset to be used as a filter.
+
+    Optional
+    --------
+    filtertype: default = 'intersects'
+        Options = ['intersects', 'contains', 'within']
+    invert_mask: boolean
+        Default = 'True'. This determines whether you want areas that
+        DO ( = 'False') or DON'T ( = 'True') intersect with the filter dataset.
+    return_inverse: boolean
+        Default = 'False'. If True, then return both parts of the intersection:
+        - those that intersect AND
+        - those that don't as two GeoDataFrames.
+
+    Returns
+    -------
+    gpd_data_filtered: geopandas GeoDataFrame
+        If invert_mask==True, `gpd_data_filtered` is a filtered polygon set,
+        with polygons that DO intersect with gpd_filter removed.
+        If invert_mask==False, `gpd_data_filtered` is a filtered polygon set,
+        with polygons that DON'T intersect with gpd_filter removed.
+    intersect_index: list of indices of gpd_data that intersect with gpd_filter.
+
+    Optional
+    --------
+    if 'return_inverse = True'
+    gpd_data_inverse: geopandas GeoDataFrame
+        If invert_mask==True, `gpd_data_inverse` is a filtered polygon set,
+        with polygons that DON'T intersect with gpd_filter removed (inverse of gpd_data_filtered).
+        If invert_mask==False, `gpd_data_inverse` is a filtered polygon set,
+        with polygons that DO intersect with gpd_filter removed (inverse of gpd_data_filtered).
+
+    """
+
+    # Check that the coordinate reference systems of both GeoDataFrames are the same.
+    assert gpd_data.crs == gpd_filter.crs
+
+    # Find the index of all the polygons in gpd_data that intersect with gpd_filter.
+    intersections = gpd_filter.sjoin(gpd_data,
+                                     how="inner",
+                                     predicate=filtertype)
+    intersect_index = np.sort(intersections["index_right"].unique())
+
+    if invert_mask:
+        # Grab only the polygons that are NOT in the intersect_index.
+        gpd_data_filtered = gpd_data.loc[~gpd_data.index.isin(intersect_index)]
+    else:
+        # Grab only the polygons that ARE in the intersect_index.
+        gpd_data_filtered = gpd_data.loc[gpd_data.index.isin(intersect_index)]
+
+    if return_inverse:
+        # We need to use the indices from intersect_index to find the inverse dataset, so we
+        # will just swap the '~'.
+
+        if invert_mask:
+            # Grab only the polygons that ARE in the intersect_index.
+            gpd_data_inverse = gpd_data.loc[gpd_data.index.isin(
+                intersect_index)]
+        else:
+            # Grab only the polygons that are NOT in the intersect_index.
+            gpd_data_inverse = gpd_data.loc[~gpd_data.index.isin(intersect_index)]
+
+        return gpd_data_filtered, intersect_index, gpd_data_inverse
+    else:
+        return gpd_data_filtered, intersect_index
+
+
+def pp_test_gdf(gdf):
+    """
+    Function to calculate the Polsby–Popper test values on a
+    geopandas GeoDataFrame.
+    """
+    gdf["area"] = gdf["geometry"].area
+    gdf["perimeter"] = gdf["geometry"].length
+    gdf["pp_test"] = (4 * math.pi * gdf["area"]) / (gdf["perimeter"] ** 2)
+
+    return gdf
 
 
 def split_large_polygons(input_gdf, pp_thresh: int = 0.005, method="nothing"):
@@ -201,5 +291,7 @@ def filter_waterbodies(
     # still in the size range we want.
     large_polygons_handled["area"] = large_polygons_handled.area
     filtered_polygons = large_polygons_handled.loc[((large_polygons_handled['area'] > min_polygon_size) & (large_polygons_handled['area'] <= max_polygon_size))]
+
+    filtered_polygons.drop(columns=['area'], inplace=True)
 
     return filtered_polygons

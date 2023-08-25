@@ -11,6 +11,7 @@ import datacube
 import math
 import logging
 import shapely
+import geohash as gh
 import numpy as np
 import pandas as pd
 import geopandas as gpd
@@ -18,11 +19,94 @@ import geopandas as gpd
 from datacube.utils.geometry import Geometry
 from deafrica_tools.spatial import xr_vectorize
 
-from .helpers import check_wetness_thresholds, assign_unique_ids, get_product_tiles, merge_polygons_at_tile_boundary
-from .filters import filter_waterbodies
+from .filters import filter_geodataframe_by_intersection, filter_waterbodies
 
 
 _log = logging.getLogger(__name__)
+
+
+def get_product_regions(product: str):
+    """
+    Returns a GeoDataFrame of all the tiles/regions of the DE Africa product.
+
+    Parameters
+    ----------
+    product: str
+        DE Africa product to get regions for.
+
+    Returns
+    -------
+    geopandas.geodataframe.GeoDataFrame
+
+    """
+    base_url = "https://explorer.digitalearth.africa/api/regions/"
+    regions_url = f"{base_url}{product}"
+
+    try:
+        regions = gpd.read_file(regions_url).drop('count', axis=1)
+        regions.set_index("region_code", inplace=True)
+        return regions
+    except Exception as e:
+        raise e
+
+
+def get_product_tiles(product="wofs_ls_summary_alltime", aoi_gdf=None):
+    """
+    Returns the regions/tiles of the DE Africa product that intersect with
+    the area of interest GeoDataFrame.
+
+    Parameters
+    ----------
+    product : str, optional
+        Digital Earth Africa product, by default "wofs_ls_summary_alltime"
+    aoi_gdf : geopandas.geodataframe.GeoDataFrame, optional
+        GeoDataFrame of the area of interest, by default None
+
+    Returns
+    -------
+    geopandas.geodataframe.GeoDataFrame
+        Regions/tiles of the DE Africa product that intersect with
+        the area of interest GeoDataFrame.
+    """
+
+    # Load the product regions.
+    regions = get_product_regions(product=product)
+
+    if aoi_gdf is None:
+        print(f"Getting all {product} regions...")
+        tiles = regions
+    else:
+        # Reproject the regions to match the area of interest.
+        crs = aoi_gdf.crs
+        regions = regions.to_crs(crs)
+
+        tiles, _ = filter_geodataframe_by_intersection(regions,
+                                                       aoi_gdf,
+                                                       filtertype="intersects",
+                                                       invert_mask=False,
+                                                       return_inverse=False)
+    print(f"{len(tiles)} {product} tiles found.")
+    return tiles
+
+
+def check_wetness_thresholds(minimum_wet_thresholds):
+    """
+    Function to validate the wetness thresholds.
+    """
+    # Test whether the wetness threshold has been correctly set.
+
+    if minimum_wet_thresholds[0] > minimum_wet_thresholds[-1]:
+        error_msg = 'We will be running a hybrid wetness threshold. ' \
+            'Please ensure that the primary threshold has a higher value than the ' \
+            'secondary threshold. \n'
+        raise ValueError(error_msg)
+    else:
+        print_msg = 'We will be running a hybrid wetness threshold. \n' \
+            f'**You have set {minimum_wet_thresholds[-1]} as the ' \
+            'primary threshold, which will define the location of the waterbody ' \
+            f'polygons \n with {minimum_wet_thresholds[0]} set as the supplementary ' \
+            'threshold, which will define the extent/shape of the waterbody polygons.**'
+        return (print_msg)
 
 
 def get_polygons_using_thresholds(
@@ -151,6 +235,65 @@ def get_polygons_using_thresholds(
     secondary_threshold_polygons = pd.concat(secondary_threshold_polygons_list)
 
     return primary_threshold_polygons, secondary_threshold_polygons
+
+
+def merge_polygons_at_tile_boundary(input_polygons, tiles):
+    """ 
+    Function to merge waterbody polygons located at tile boundaries.
+    """
+
+    assert input_polygons.crs == tiles.crs
+
+    # Add a 1 pixel (30 m) buffer to the tiles boundary.
+    buffered_30m_tiles = tiles.boundary.buffer(30, cap_style="flat", join_style="mitre")
+    buffered_30m_tiles_gdf = gpd.GeoDataFrame(geometry=buffered_30m_tiles, crs=tiles.crs)
+
+    # Get the polygons at the tile boundaries.
+    boundary_polygons, _, not_boundary_polygons = filter_geodataframe_by_intersection(
+        input_polygons,
+        buffered_30m_tiles_gdf,
+        invert_mask=False,
+        return_inverse=True)
+
+    # Now combine overlapping polygons in boundary_polygons.
+    merged_boundary_polygons_geoms = shapely.ops.unary_union(boundary_polygons['geometry'])
+
+    # `Explode` the multipolygon back out into individual polygons.
+    merged_boundary_polygons = gpd.GeoDataFrame(crs=input_polygons.crs, geometry=[merged_boundary_polygons_geoms])
+    merged_boundary_polygons = merged_boundary_polygons.explode(index_parts=True).reset_index(drop=True)
+
+    # Then combine our merged_boundary_polygons with the not_boundary_polygons.
+    all_polygons = gpd.GeoDataFrame(pd.concat([not_boundary_polygons, merged_boundary_polygons], ignore_index=True, sort=True)).set_geometry('geometry')
+
+    return all_polygons
+
+
+def assign_unique_ids(polygons):
+    """ 
+    Function to assign a unique ID to each waterbody polygon. 
+    """
+
+    crs = polygons.crs
+
+    # Generate a unique id for each polygon.
+    polygons_with_unique_ids = polygons.to_crs(epsg=4326)
+    polygons_with_unique_ids['UID'] = polygons_with_unique_ids.apply(lambda x: gh.encode(x.geometry.centroid.y, x.geometry.centroid.x, precision=9), axis=1)
+
+    # Check that our unique ID is in fact unique
+    assert polygons_with_unique_ids['UID'].is_unique
+
+    # Make an arbitrary numerical ID for each polygon. We will first sort the dataframe by geohash
+    # so that polygons close to each other are numbered similarly.
+    polygons_with_unique_ids_sorted = polygons_with_unique_ids.sort_values(by=['UID']).reset_index()
+    polygons_with_unique_ids_sorted['WB_ID'] = polygons_with_unique_ids_sorted.index
+
+    # The step above creates an 'index' column, which we don't actually want, so drop it.
+    polygons_with_unique_ids_sorted.drop(columns=['index'], inplace=True)
+
+    # Reproject to the same crs as the input polygons.
+    polygons_with_unique_ids_sorted = polygons_with_unique_ids_sorted.to_crs(crs)
+
+    return polygons_with_unique_ids_sorted
 
 
 def get_waterbodies(
