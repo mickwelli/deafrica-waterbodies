@@ -61,7 +61,7 @@ def setup_output_fp(
                 _log.info(f"Output folder {local_dir_fp} created.")
 
             output_fp = os.path.join(local_dir_fp, object_name)
-            _log.info("Waterbodies will be written to local disk as {output_fp}")
+            _log.info(f"Waterbodies will be written to local disk as {output_fp}")
         except Exception as error:
             _log.error(error)
             raise
