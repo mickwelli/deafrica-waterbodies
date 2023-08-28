@@ -1,11 +1,10 @@
-import os
 import math
 import click
 import logging
 import geopandas as gpd
 
 from .log import logging_setup
-from .io import setup_output_fp
+from .io import write_waterbodies_to_file
 from .group_options import MutuallyExclusiveOption
 
 from deafrica_waterbodies.waterbodies.polygons.attributes import add_attributes
@@ -13,8 +12,8 @@ from deafrica_waterbodies.waterbodies.polygons.make_polygons import get_waterbod
 
 
 @click.command("waterbodies-from-vector-file",
-              short_help="Waterbodies for area defined in vector file.",
-              no_args_is_help=True,)
+               short_help="Waterbodies for area defined in vector file.",
+               no_args_is_help=True,)
 @click.option("--vector-file-fp",
               help="The path to a vector defining the area of interest.")
 @click.option("--primary-threshold",
@@ -138,14 +137,6 @@ def waterbodies_from_vector_file(
     logging_setup(verbose)
     _log = logging.getLogger(__name__)
 
-    output_fp = setup_output_fp(
-        product_version,
-        storage_location,
-        output_bucket_name,
-        output_local_folder,
-        output_file_name,
-        output_file_type)
-
     if remove_ocean_polygons:
         filter_out_ocean_polygons = True
     else:
@@ -196,16 +187,15 @@ def waterbodies_from_vector_file(
         )
 
     # Reproject to EPSG:4326
-    waterbodies_gdf_4326 = add_attributes(waterbodies_gdf, 
+    waterbodies_gdf_4326 = add_attributes(waterbodies_gdf,
                                           timeseries_output_bucket=output_bucket_name,
-                                          timeseries_product_version=product_version )
+                                          timeseries_product_version=product_version)
 
-    _log.info(f"Writing waterbodies to {output_fp} ...")
-    try:
-        # If writing to s3 bucket,
-        # if user has write access to bucket this should work.
-        waterbodies_gdf_4326.to_file(output_fp)
-        _log.info("Done.")
-    except Exception as error:
-        _log.error(error)
-        raise
+    write_waterbodies_to_file(
+        waterbodies_gdf_4326,
+        product_version,
+        storage_location,
+        output_bucket_name,
+        output_local_folder,
+        output_file_name,
+        output_file_type)

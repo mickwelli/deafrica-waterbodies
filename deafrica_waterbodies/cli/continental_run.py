@@ -1,10 +1,9 @@
-import os
 import math
 import click
 import logging
 
 from .log import logging_setup
-from .io import setup_output_fp
+from .io import write_waterbodies_to_file
 from .group_options import MutuallyExclusiveOption
 
 from deafrica_waterbodies.waterbodies.polygons.attributes import add_attributes
@@ -12,8 +11,8 @@ from deafrica_waterbodies.waterbodies.polygons.make_polygons import get_waterbod
 
 
 @click.command("waterbodies-continental-run",
-              short_help="Waterbodies for all of Africa.",
-              no_args_is_help=True)
+               short_help="Waterbodies for all of Africa.",
+               no_args_is_help=True)
 @click.option("--primary-threshold",
               default=0.1,
               type=click.FLOAT,
@@ -132,14 +131,6 @@ def waterbodies_continental_run(
     logging_setup(verbose)
     _log = logging.getLogger(__name__)
 
-    output_fp = setup_output_fp(
-        product_version,
-        storage_location,
-        output_bucket_name,
-        output_local_folder,
-        output_file_name,
-        output_file_type)
-
     if remove_ocean_polygons:
         filter_out_ocean_polygons = True
     else:
@@ -189,12 +180,11 @@ def waterbodies_continental_run(
                                           timeseries_output_bucket=output_bucket_name,
                                           timeseries_product_version=product_version)
 
-    _log.info(f"Writing waterbodies to {output_fp} ...")
-    try:
-        # If writing to s3 bucket,
-        # if user has write access to bucket this should work.
-        waterbodies_gdf_4326.to_file(output_fp)
-        _log.info("Done.")
-    except Exception as error:
-        _log.error(error)
-        raise
+    write_waterbodies_to_file(
+        waterbodies_gdf_4326,
+        product_version,
+        storage_location,
+        output_bucket_name,
+        output_local_folder,
+        output_file_name,
+        output_file_type)
