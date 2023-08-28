@@ -23,6 +23,10 @@ def logging_setup(verbose: int = 1):
         stream=sys.stdout,
     )
 
+    # Suppress all (other than CRITICAL) errors for boto3
+    logging.getLogger('botocore').setLevel(logging.CRITICAL)
+    logging.getLogger('boto3').setLevel(logging.CRITICAL)
+
 
 # Keeping this here incase its needed.
 def setup_logging(verbose: int):
