@@ -295,6 +295,5 @@ def filter_waterbodies(
     large_polygons_handled["area"] = large_polygons_handled.area
     filtered_polygons = large_polygons_handled.loc[((large_polygons_handled['area'] > min_polygon_size) & (large_polygons_handled['area'] <= max_polygon_size))]
 
-    filtered_polygons.drop(columns=['area'], inplace=True)
-
-    return filtered_polygons
+    # Return a GeoDataFrame with the geometry column only. 
+    return filtered_polygons[["geometry"]]
