@@ -16,9 +16,9 @@ def add_attributes(waterbodies_gdf, timeseries_output_bucket, timeseries_product
     waterbodies_gdf_6933 = waterbodies_gdf.to_crs("EPSG:6933")
 
     # Perimeter
-    waterbodies_gdf_6933["perimeter_m"] = waterbodies_gdf_6933.geometry.length
+    waterbodies_gdf_6933["perim_m"] = waterbodies_gdf_6933.geometry.length.round(decimals=4)
     # Area
-    waterbodies_gdf_6933["area_m2"] = waterbodies_gdf_6933.geometry.area
+    waterbodies_gdf_6933["area_m2"] = waterbodies_gdf_6933.geometry.area.round(decimals=4)
     # Timeseries url
     waterbodies_gdf_6933["timeseries"] = waterbodies_gdf_6933.apply(lambda row: get_timeseries_url_from_uid(row["UID"], timeseries_output_bucket, timeseries_product_version), axis=1)
 
