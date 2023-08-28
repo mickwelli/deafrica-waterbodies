@@ -11,7 +11,6 @@ import datacube
 import math
 import logging
 import shapely
-import geohash as gh
 import numpy as np
 import pandas as pd
 import geopandas as gpd
@@ -19,6 +18,7 @@ import geopandas as gpd
 from datacube.utils.geometry import Geometry
 from deafrica_tools.spatial import xr_vectorize
 
+from .attributes import assign_unique_ids
 from .filters import filter_geodataframe_by_intersection, filter_waterbodies
 
 
@@ -267,34 +267,6 @@ def merge_polygons_at_tile_boundary(input_polygons, tiles):
     all_polygons = gpd.GeoDataFrame(pd.concat([not_boundary_polygons, merged_boundary_polygons], ignore_index=True, sort=True)).set_geometry('geometry')
 
     return all_polygons
-
-
-def assign_unique_ids(polygons):
-    """
-    Function to assign a unique ID to each waterbody polygon.
-    """
-
-    crs = polygons.crs
-
-    # Generate a unique id for each polygon.
-    polygons_with_unique_ids = polygons.to_crs(epsg=4326)
-    polygons_with_unique_ids['UID'] = polygons_with_unique_ids.apply(lambda x: gh.encode(x.geometry.centroid.y, x.geometry.centroid.x, precision=9), axis=1)
-
-    # Check that our unique ID is in fact unique
-    assert polygons_with_unique_ids['UID'].is_unique
-
-    # Make an arbitrary numerical ID for each polygon. We will first sort the dataframe by geohash
-    # so that polygons close to each other are numbered similarly.
-    polygons_with_unique_ids_sorted = polygons_with_unique_ids.sort_values(by=['UID']).reset_index()
-    polygons_with_unique_ids_sorted['WB_ID'] = polygons_with_unique_ids_sorted.index
-
-    # The step above creates an 'index' column, which we don't actually want, so drop it.
-    polygons_with_unique_ids_sorted.drop(columns=['index'], inplace=True)
-
-    # Reproject to the same crs as the input polygons.
-    polygons_with_unique_ids_sorted = polygons_with_unique_ids_sorted.to_crs(crs)
-
-    return polygons_with_unique_ids_sorted
 
 
 def get_waterbodies(

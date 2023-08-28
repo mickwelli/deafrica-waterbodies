@@ -1,31 +1,148 @@
-def get_timeseries_url_from_uid(uid, timeseries_output_bucket, timeseries_product_version):
-    version = timeseries_product_version.replace(".", "-")
+import geohash as gh
+
+
+def assign_unique_ids(polygons):
+    """
+    Function to assign a unique ID to each waterbody polygon.
+
+    Parameters
+    ----------
+    polygons : geopandas.geodataframe.GeoDataFrame
+        GeoDataFrame containing the waterbody polygons.
+
+    Returns
+    -------
+    geopandas.geodataframe.GeoDataFrame
+        GeoDataFrame containing the waterbody polygons with additional columns
+        "UID" and "WB_ID".
+        The "UID" column contains a unique identifier
+        for each polygon.
+        The "WB_ID" column contains an arbitrary numerical ID for each
+        polygon with polygons close to each other numbered similarly.
+    """
+
+    crs = polygons.crs
+
+    # Generate a unique id for each polygon.
+    polygons_with_unique_ids = polygons.to_crs(epsg=4326)
+    polygons_with_unique_ids['UID'] = polygons_with_unique_ids.apply(lambda x: gh.encode(x.geometry.centroid.y, x.geometry.centroid.x, precision=9), axis=1)
+
+    # Check that our unique ID is in fact unique
+    assert polygons_with_unique_ids['UID'].is_unique
+
+    # Make an arbitrary numerical ID for each polygon. We will first sort the dataframe by geohash
+    # so that polygons close to each other are numbered similarly.
+    polygons_with_unique_ids_sorted = polygons_with_unique_ids.sort_values(by=['UID']).reset_index()
+    polygons_with_unique_ids_sorted['WB_ID'] = polygons_with_unique_ids_sorted.index
+
+    # The step above creates an 'index' column, which we don't actually want, so drop it.
+    polygons_with_unique_ids_sorted.drop(columns=['index'], inplace=True)
+
+    # Reproject to the same crs as the input polygons.
+    polygons_with_unique_ids_sorted = polygons_with_unique_ids_sorted.to_crs(crs)
+
+    return polygons_with_unique_ids_sorted
+
+
+def get_timeseries_s3_uri(
+        uid,
+        product_version,
+        output_bucket_name,
+        ):
+    """
+    Get the timeseries s3 URI given a unique identifier for a polygon.
+
+    Parameters
+    ----------
+    uid : str
+        Unique identifier
+    product_version : str
+        The product version for the DE Africa Waterbodies service. 
+    output_bucket_name : str
+        The s3 bucket for the DE Africa Waterbodies service shapefiles and timeseries.
+
+    Returns
+    -------
+    str
+        A s3 URI for the timeseries for a waterbody polygon.
+    """
+
+    # Incase storage location is local.
+    if output_bucket_name is None:
+        output_bucket_name == "deafrica-waterbodies-dev"
+
+    version = product_version.replace(".", "-")
 
     subfolder = uid[:4]
 
     csv_file = f"{uid}_v{version[0]}.csv"
 
-    timeseries_url = f's3://{timeseries_output_bucket}/{version}/timeseries/{subfolder}/{csv_file}'
+    timeseries_s3_uri = f"s3://{output_bucket_name}/{version}/timeseries/{subfolder}/{csv_file}"
 
-    return timeseries_url
+    return timeseries_s3_uri
 
 
-def add_attributes(waterbodies_gdf, timeseries_output_bucket, timeseries_product_version):
+def add_timeseries_attribute(
+        polygons,
+        product_version,
+        output_bucket_name,):
+    """
+    Function to assign the s3 URI for the timeseries for each waterbody polygon.
+
+    Parameters
+    ----------
+    polygons : geopandas.geodataframe.GeoDataFrame
+        GeoDataFrame containing the waterbody polygons.
+    product_version : str
+        The product version for the DE Africa Waterbodies service.
+    output_bucket_name : str
+        The s3 bucket for the DE Africa Waterbodies service shapefiles and timeseries.
+
+    Returns
+    -------
+    geopandas.geodataframe.GeoDataFrame
+        GeoDataFrame containing the waterbody polygons with an additional
+        column "timeseries".
+        The "timeseries" column contains the s3 URI for the timeseries for each
+        of the waterbody polygons.
+    """
+
+    polygons["timeseries"] = polygons.apply(lambda row: get_timeseries_s3_uri(row["UID"],
+                                                                              product_version,
+                                                                              output_bucket_name,
+                                                                              ), axis=1)
+    return polygons
+
+
+def add_area_and_perimeter_attributes(polygons):
+    """
+    Function to add the area and perimeter for each waterbody polygon.
+
+    Parameters
+    ----------
+    polygons : geopandas.geodataframe.GeoDataFrame
+        GeoDataFrame containing the waterbody polygons.
+
+    Returns
+    -------
+    geopandas.geodataframe.GeoDataFrame
+        GeoDataFrame with the crs "EPSG:6933" containing the waterbody polygons 
+        with additional columns "area_m2" and "perim_m".
+        The "area_m2" column contains the area in meters squared of each
+        waterbody polygon calculated in the crs "EPS:6933".
+        The "perim_m" column contains the perimeter in meters of each
+        waterbody polygon calculated in the crs "EPS:6933".
+    """
 
     # Reproject into a projected crs
-    waterbodies_gdf_6933 = waterbodies_gdf.to_crs("EPSG:6933")
+    polygons_6933 = polygons.to_crs("EPSG:6933")
 
     # Perimeter
-    waterbodies_gdf_6933["perim_m"] = waterbodies_gdf_6933.geometry.length
+    polygons_6933["perim_m"] = polygons_6933.geometry.length
+    polygons_6933["perim_m"] = polygons_6933["perim_m"].round(decimals=4)
+
     # Area
-    waterbodies_gdf_6933["area_m2"] = waterbodies_gdf_6933.geometry.area
-    # Timeseries url
-    waterbodies_gdf_6933["timeseries"] = waterbodies_gdf_6933.apply(lambda row: get_timeseries_url_from_uid(row["UID"], timeseries_output_bucket, timeseries_product_version), axis=1)
+    polygons_6933["area_m2"] = polygons_6933.geometry.area
+    polygons_6933["area_m2"] = polygons_6933["area_m2"].round(decimals=4)
 
-    # Round the values in the perimeter and area columns to the specified number of decimal places.
-    waterbodies_gdf_6933 = waterbodies_gdf_6933.round({"perim_m": 4, "area_m2": 4})
-
-    # Project to epsg:4326
-    waterbodies_gdf_4326 = waterbodies_gdf_6933.to_crs("EPSG:4326")
-
-    return waterbodies_gdf_4326
+    return polygons_6933

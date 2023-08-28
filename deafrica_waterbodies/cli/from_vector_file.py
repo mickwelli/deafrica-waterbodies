@@ -7,7 +7,7 @@ from .logs import logging_setup
 from .io import write_waterbodies_to_file
 from .group_options import MutuallyExclusiveOption
 
-from deafrica_waterbodies.waterbodies.polygons.attributes import add_attributes
+from deafrica_waterbodies.waterbodies.polygons.attributes import add_timeseries_attribute, add_area_and_perimeter_attributes
 from deafrica_waterbodies.waterbodies.polygons.make_polygons import get_waterbodies
 
 
@@ -186,10 +186,13 @@ def waterbodies_from_vector_file(
         pp_test_threshold=pp_test_threshold
         )
 
+    waterbodies_gdf = add_area_and_perimeter_attributes(waterbodies_gdf)
+    waterbodies_gdf = add_timeseries_attribute(waterbodies_gdf,
+                                               product_version,
+                                               output_bucket_name)
+
     # Reproject to EPSG:4326
-    waterbodies_gdf_4326 = add_attributes(waterbodies_gdf,
-                                          timeseries_output_bucket=output_bucket_name,
-                                          timeseries_product_version=product_version)
+    waterbodies_gdf_4326 = waterbodies_gdf.to_crs("EPSG:4326")
 
     write_waterbodies_to_file(
         waterbodies_gdf_4326,
