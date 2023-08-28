@@ -29,7 +29,7 @@ def test_access_to_bucket(bucket_name):
 
 
 # From https://boto3.amazonaws.com/v1/documentation/api/latest/guide/s3-uploading-files.html
-def upload_file(file_name, bucket_name, object_name=None):
+def upload_file_to_s3(file_name, bucket_name, object_name=None):
     """Upload a file to an S3 bucket
 
     :param file_name: File to upload
@@ -48,7 +48,8 @@ def upload_file(file_name, bucket_name, object_name=None):
         response = s3_client.upload_file(file_name, bucket_name, object_name)
     except ClientError as e:
         _log.error(e)
-        raise
+        return False
+    return True
 
 
 def write_waterbodies_to_file(
@@ -123,10 +124,9 @@ def write_waterbodies_to_file(
                 local_temp_files = os.listdir(local_temp_dir)
                 for local_temp_file in local_temp_files:
                     local_temp_file_fp = os.path.join(local_temp_dir, local_temp_file)
-                    s3_file_uri = f"s3://{output_bucket_name}/{object_prefix}{local_temp_file}"
-                    upload_file(file_name=local_temp_file_fp,
-                                bucket_name=output_bucket_name,
-                                object_name=s3_file_uri)
+                    upload_file_to_s3(file_name=local_temp_file_fp,
+                                      bucket_name=output_bucket_name,
+                                      object_name=f"{object_prefix}{local_temp_file}")
 
                 # Delete temporary folder.
                 shutil.rmtree(local_temp_dir)
