@@ -4,7 +4,7 @@ import logging
 import shapely
 import geopandas as gpd
 
-from .log import logging_setup
+from .logs import logging_setup
 from .io import write_waterbodies_to_file
 from .group_options import MutuallyExclusiveOption
 
