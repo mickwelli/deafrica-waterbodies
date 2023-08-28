@@ -239,7 +239,7 @@ def get_polygons_using_thresholds(
 
 
 def merge_polygons_at_tile_boundary(input_polygons, tiles):
-    """ 
+    """
     Function to merge waterbody polygons located at tile boundaries.
     """
 
@@ -270,8 +270,8 @@ def merge_polygons_at_tile_boundary(input_polygons, tiles):
 
 
 def assign_unique_ids(polygons):
-    """ 
-    Function to assign a unique ID to each waterbody polygon. 
+    """
+    Function to assign a unique ID to each waterbody polygon.
     """
 
     crs = polygons.crs
@@ -363,4 +363,5 @@ def get_waterbodies(
     _log.info("Assigning unique ids to each polygon....")
     filtered_polygons_with_unique_ids = assign_unique_ids(filtered_polygons)
 
+    # Calculate area, perimeter
     return filtered_polygons_with_unique_ids
