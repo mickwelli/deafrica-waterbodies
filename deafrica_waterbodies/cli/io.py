@@ -16,7 +16,7 @@ def test_access_to_bucket(bucket_name):
     s3_client = boto3.client('s3')
 
     try:
-        test = s3_client.head_bucket(Bucket="deafrica-waterbodies-dev")
+        test = s3_client.head_bucket(Bucket=bucket_name)
         if test:
             _log.info(f"This user can write to the s3 bucket {bucket_name}")
     except ClientError as error:
