@@ -44,27 +44,27 @@ def assign_unique_ids(polygons):
     return polygons_with_unique_ids_sorted
 
 
-def get_timeseries_s3_uri(
+def get_timeseries_s3_object_url(
         uid,
         product_version,
         output_bucket_name,
         ):
     """
-    Get the timeseries s3 URI given a unique identifier for a polygon.
+    Get the timeseries s3 object URL given a unique identifier for a polygon.
 
     Parameters
     ----------
     uid : str
         Unique identifier
     product_version : str
-        The product version for the DE Africa Waterbodies service. 
+        The product version for the DE Africa Waterbodies service.
     output_bucket_name : str
         The s3 bucket for the DE Africa Waterbodies service shapefiles and timeseries.
 
     Returns
     -------
     str
-        A s3 URI for the timeseries for a waterbody polygon.
+        A s3 object URL for the timeseries for a waterbody polygon.
     """
 
     # Incase storage location is local.
@@ -77,9 +77,9 @@ def get_timeseries_s3_uri(
 
     csv_file = f"{uid}_v{version[0]}.csv"
 
-    timeseries_s3_uri = f"s3://{output_bucket_name}/{version}/timeseries/{subfolder}/{csv_file}"
+    timeseries_s3_object_url = f"https://{output_bucket_name}.s3.af-south-1.amazonaws.com/{version}/timeseries/{subfolder}/{csv_file}"
 
-    return timeseries_s3_uri
+    return timeseries_s3_object_url
 
 
 def add_timeseries_attribute(
@@ -87,7 +87,7 @@ def add_timeseries_attribute(
         product_version,
         output_bucket_name,):
     """
-    Function to assign the s3 URI for the timeseries for each waterbody polygon.
+    Function to assign the s3 object URL for the timeseries for each waterbody polygon.
 
     Parameters
     ----------
@@ -103,14 +103,14 @@ def add_timeseries_attribute(
     geopandas.geodataframe.GeoDataFrame
         GeoDataFrame containing the waterbody polygons with an additional
         column "timeseries".
-        The "timeseries" column contains the s3 URI for the timeseries for each
+        The "timeseries" column contains the s3 object URL for the timeseries for each
         of the waterbody polygons.
     """
 
-    polygons["timeseries"] = polygons.apply(lambda row: get_timeseries_s3_uri(row["UID"],
-                                                                              product_version,
-                                                                              output_bucket_name,
-                                                                              ), axis=1)
+    polygons["timeseries"] = polygons.apply(lambda row: get_timeseries_s3_object_url(row["UID"],
+                                                                                     product_version,
+                                                                                     output_bucket_name,
+                                                                                     ), axis=1)
     return polygons
 
 
@@ -126,7 +126,7 @@ def add_area_and_perimeter_attributes(polygons):
     Returns
     -------
     geopandas.geodataframe.GeoDataFrame
-        GeoDataFrame with the crs "EPSG:6933" containing the waterbody polygons 
+        GeoDataFrame with the crs "EPSG:6933" containing the waterbody polygons
         with additional columns "area_m2" and "perim_m".
         The "area_m2" column contains the area in meters squared of each
         waterbody polygon calculated in the crs "EPS:6933".
