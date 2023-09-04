@@ -1,18 +1,38 @@
 import math
 import click
 import logging
+import shapely
+import geopandas as gpd
 
-from .logs import logging_setup
-from .io import write_waterbodies_to_file
-from .group_options import MutuallyExclusiveOption
+from deafrica_waterbodies.cli.logs import logging_setup
+from deafrica_waterbodies.cli.io import write_waterbodies_to_file
+from deafrica_waterbodies.cli.group_options import MutuallyExclusiveOption
 
 from deafrica_waterbodies.waterbodies.polygons.attributes import add_timeseries_attribute, add_area_and_perimeter_attributes
 from deafrica_waterbodies.waterbodies.polygons.make_polygons import get_waterbodies
 
 
-@click.command("waterbodies-continental-run",
-               short_help="Waterbodies for all of Africa.",
+@click.command("generate-waterbodies",
                no_args_is_help=True)
+@click.option("--run-type",
+              type=click.Choice(["continental", "custom"]),
+              default=["custom"],
+              help="If run-type is continental, generate waterbodies for all the "
+              " WOfS All Time Summary regions. If run-type is custom, pass a vector "
+              "file defining the area of interest to --vector-file-fp OR the coordinates "
+              "of a bounding box for the area of interest to --bbox.")
+@click.option("--vector-file-fp",
+              cls=MutuallyExclusiveOption,
+              mutually_exclusive=["bbox"],
+              help="The path to a vector defining the area of interest.")
+@click.option("--bbox",
+              cls=MutuallyExclusiveOption,
+              mutually_exclusive=["vector_file_fp"],
+              help="Coordinates of the area of interest's bounding box in the format 'minx,miny,maxx,maxy'.")
+@click.option("--bbox-crs",
+              default="EPSG:4326",
+              help="CRS of the bounding box coordinates.",
+              show_default=True)
 @click.option("--primary-threshold",
               default=0.1,
               type=click.FLOAT,
@@ -104,7 +124,11 @@ from deafrica_waterbodies.waterbodies.polygons.make_polygons import get_waterbod
               show_default=True,
               help="File type for the outputs waterbodies.",
               type=click.Choice(['GeoJSON', 'Shapefile'], case_sensitive=False))
-def waterbodies_continental_run(
+def generate_waterbodies(
+    run_type,
+    vector_file_fp,
+    bbox,
+    bbox_crs,
     primary_threshold,
     secondary_threshold,
     min_polygon_size,
@@ -131,6 +155,52 @@ def waterbodies_continental_run(
     logging_setup(verbose)
     _log = logging.getLogger(__name__)
 
+    dask_chunks = {"x": 3000, "y": 3000, "time": 1}
+    resolution = (-30, 30)
+    output_crs = "EPSG:6933"
+    min_valid_observations = 128
+
+    if run_type == "custom":
+        if not vector_file_fp and not bbox:
+            error_msg = "If not running for all of Africa please specify an " \
+                "area of interest by EITHER passing a vector file path to --vector-file-fp "  \
+                "OR passing bounding box coordinates to --bbox"
+            _log.error(error_msg)
+            raise ValueError(error_msg)
+        elif vector_file_fp and bbox:
+            error_msg = "Please specify EITHER a vector file path using --vector-file-fp OR  bounding box " \
+                "coordinates using --bbox ."
+            _log.error(error_msg)
+            raise ValueError(error_msg)
+        elif vector_file_fp and not bbox:
+            # Read the vector file.
+            try:
+                aoi_gdf = gpd.read_file(vector_file_fp)
+                aoi_gdf = aoi_gdf.to_crs(output_crs)
+                continental_run = False
+            except Exception as error:
+                _log.error(error)
+                raise
+        elif bbox and not vector_file_fp:
+            try:
+                # Convert bounding box to GeoDataFrame.
+                bbox_ = [float(i.strip()) for i in bbox.split(",")]
+                aoi_gdf = gpd.GeoDataFrame(geometry=[shapely.geometry.box(*bbox_)], crs=bbox_crs)
+                aoi_gdf = aoi_gdf.to_crs(output_crs)
+                continental_run = False
+            except Exception as error:
+                _log.error(error)
+                raise
+    elif run_type == "continental":
+        if vector_file_fp or bbox:
+            error_msg = "If running for all of Africa do not pass a vector file to " \
+                "--vector-file-fp or bounding box coordinates to --bbox"
+            _log.error(error_msg)
+            raise ValueError(error_msg)
+        else:
+            aoi_gdf = None
+            continental_run = True
+
     if remove_ocean_polygons:
         filter_out_ocean_polygons = True
     else:
@@ -145,14 +215,6 @@ def waterbodies_continental_run(
         filter_out_urban_polygons = True
     else:
         filter_out_urban_polygons = False
-
-    dask_chunks = {"x": 3000, "y": 3000, "time": 1}
-    resolution = (-30, 30)
-    output_crs = "EPSG:6933"
-    min_valid_observations = 128
-
-    aoi_gdf = None
-    continental_run = True
 
     waterbodies_gdf = get_waterbodies(
         aoi_gdf=aoi_gdf,
