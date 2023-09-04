@@ -64,6 +64,9 @@ def generate_timeseries(
     subset_polygon_ids,
     verbose
 ):
+    """
+    Generate timeseries for a set of waterbody polygons.
+    """
     logging_setup(verbose=verbose)
 
     # Convert strings to datetime.
