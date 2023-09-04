@@ -36,7 +36,7 @@ from deafrica_waterbodies.waterbodies.polygons.make_polygons import get_waterbod
 @click.option("--primary-threshold",
               default=0.1,
               type=click.FLOAT,
-              help="Threshold to the location of the waterbody polygons.",
+              help="Threshold to define the location of the waterbody polygons.",
               show_default=True)
 @click.option("--secondary-threshold",
               default=0.05,
