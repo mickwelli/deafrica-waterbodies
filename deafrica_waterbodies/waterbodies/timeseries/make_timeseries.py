@@ -298,15 +298,9 @@ def generate_timeseries_from_wofs_ls(
                 invalid_count = pixel_count - valid_count
 
                 # Convert the counts into percentages.
-                try:
-                    valid_and_wet_percentage = (valid_and_wet_count / pixel_count) * 100
-                    valid_and_dry_percentage = (valid_and_dry_count / pixel_count) * 100
-                    invalid_percentage = (invalid_count / pixel_count) * 100
-                except ZeroDivisionError:  # occurs when there no valid (clear) pixels
-                    _log.debug(f'{poly_id} has divide by zero error')
-                    valid_and_wet_percentage = np.nan
-                    valid_and_dry_percentage = np.nan
-                    invalid_percentage = 100
+                valid_and_wet_percentage = (valid_and_wet_count / pixel_count) * 100
+                valid_and_dry_percentage = (valid_and_dry_count / pixel_count) * 100
+                invalid_percentage = (invalid_count / pixel_count) * 100
 
                 # Convert the timestep date from numpy.datetime64 to string.
                 observation_date = pd.to_datetime(timestep)
