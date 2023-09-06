@@ -376,13 +376,13 @@ def generate_timeseries_from_wofs_ls(
 
                 # Convert the timeseries data dictionary for the polygon into
                 # a DataFrame.
-                poly_timeseries_df = pd.DataFrame(poly_timeseries_data_dict)
+                poly_timeseries_df = pd.DataFrame(poly_timeseries_data_dict, orient="columns")
 
                 if time_span == "append":
                     # Append the DataFrame to an existing csv file.
-                    poly_timeseries_df.to_csv(poly_timeseries_fp, mode='a', index=False, header=False)
+                    poly_timeseries_df.to_csv(poly_timeseries_fp, mode="a", index=False, header=False)
                 else:
                     # Write the DataFrame to a new csv file.
-                    poly_timeseries_df.to_csv(poly_timeseries_fp)
+                    poly_timeseries_df.to_csv(poly_timeseries_fp, mode="w", index=False)
             bar.update(1)
         _log.info(f"Done! Generated timeseries for {len(polygon_ids)}.")
