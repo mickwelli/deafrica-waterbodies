@@ -301,11 +301,8 @@ def generate_timeseries_from_wofs_ls(
 
                 poly_timeseries_data_dict = {
                     "Observation Date": [],
-                    "Total pixel count": [],
                     "Wet pixel percentage": [],
                     "Wet pixel count": [],
-                    "Dry pixel percentage": [],
-                    "Dry pixel count": [],
                     "Invalid pixel percentage": [],
                     "Invalid pixel count": [],
                     }
@@ -337,12 +334,6 @@ def generate_timeseries_from_wofs_ls(
                         valid_and_wet_percentage = (valid_and_wet_count / pixel_count) * 100
                     except ZeroDivisionError:
                         valid_and_wet_percentage = 0
-
-                    try:
-                        valid_and_dry_percentage = (valid_and_dry_count / pixel_count) * 100
-                    except ZeroDivisionError:
-                        valid_and_dry_percentage = 0
-
                     try:
                         invalid_percentage = (invalid_count / pixel_count) * 100
                     except ZeroDivisionError:
@@ -356,8 +347,6 @@ def generate_timeseries_from_wofs_ls(
                     poly_timeseries_data_dict["Total pixel count"].extend([pixel_count])
                     poly_timeseries_data_dict["Wet pixel percentage"].extend([valid_and_wet_percentage])
                     poly_timeseries_data_dict["Wet pixel count"].extend([valid_and_wet_count])
-                    poly_timeseries_data_dict["Dry pixel percentage"].extend([valid_and_dry_percentage])
-                    poly_timeseries_data_dict["Dry pixel count"].extend([valid_and_dry_count])
                     poly_timeseries_data_dict["Invalid pixel percentage"].extend([invalid_percentage])
                     poly_timeseries_data_dict["Invalid pixel count"].extend([invalid_count])
 
