@@ -53,8 +53,7 @@ from deafrica_waterbodies.waterbodies.timeseries.make_timeseries import generate
               help="Option to include uncertainities in the output timeseries."
               "If you specify --include-uncertainity then you will only "
               "filter out timesteps with 100% invalid pixels. Else you will "
-              "filter out timesteps with more than 10% invalid pixels"
-)
+              "filter out timesteps with more than 10% invalid pixels")
 @click.option("--subset-polygon-ids",
               default=None,
               help="List of polygon ids in the --waterbodies-vector-file "
@@ -68,6 +67,7 @@ def generate_timeseries(
     start_date,
     end_date,
     missing_only,
+    include_uncertainity,
     subset_polygon_ids,
     verbose
 ):
