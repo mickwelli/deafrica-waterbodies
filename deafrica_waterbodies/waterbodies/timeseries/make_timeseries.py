@@ -306,14 +306,14 @@ def generate_timeseries_from_wofs_ls(
                 observation_date = pd.to_datetime(timestep)
                 observation_date_str = observation_date.strftime('%Y-%m-%d')
 
-                poly_timeseries_data_dict["Observation Date"].extend(observation_date_str)
-                poly_timeseries_data_dict["Total pixel count"].extend(pixel_count)
-                poly_timeseries_data_dict["Wet pixel percentage"].extend(valid_and_wet_percentage)
-                poly_timeseries_data_dict["Wet pixel count"].extend(valid_and_wet_count)
-                poly_timeseries_data_dict["Dry pixel percentage"].extend(valid_and_dry_percentage)
-                poly_timeseries_data_dict["Dry pixel count"].extend(valid_and_dry_count)
-                poly_timeseries_data_dict["Invalid pixel percentage"].extend(invalid_percentage)
-                poly_timeseries_data_dict["Invalid pixel count"].extend(invalid_count)
+                poly_timeseries_data_dict["Observation Date"].extend([observation_date_str])
+                poly_timeseries_data_dict["Total pixel count"].extend([pixel_count])
+                poly_timeseries_data_dict["Wet pixel percentage"].extend([valid_and_wet_percentage])
+                poly_timeseries_data_dict["Wet pixel count"].extend([valid_and_wet_count])
+                poly_timeseries_data_dict["Dry pixel percentage"].extend([valid_and_dry_percentage])
+                poly_timeseries_data_dict["Dry pixel count"].extend([valid_and_dry_count])
+                poly_timeseries_data_dict["Invalid pixel percentage"].extend([invalid_percentage])
+                poly_timeseries_data_dict["Invalid pixel count"].extend([invalid_count])
 
             # Convert the timeseries data dictionary for the polygon into
             # a DataFrame.
