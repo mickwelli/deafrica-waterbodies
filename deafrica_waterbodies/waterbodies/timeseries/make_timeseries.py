@@ -376,7 +376,7 @@ def generate_timeseries_from_wofs_ls(
 
                 # Convert the timeseries data dictionary for the polygon into
                 # a DataFrame.
-                poly_timeseries_df = pd.DataFrame(poly_timeseries_data_dict, orient="columns")
+                poly_timeseries_df = pd.DataFrame(poly_timeseries_data_dict)
 
                 if time_span == "append":
                     # Append the DataFrame to an existing csv file.
