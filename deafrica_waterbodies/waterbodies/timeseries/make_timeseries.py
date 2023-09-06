@@ -6,7 +6,7 @@ import datacube
 import numpy as np
 import pandas as pd
 import geopandas as gpd
-
+from tqdm.auto import tqdm
 from datacube.utils.geometry import Geometry
 
 from deafrica_tools.datahandling import wofs_fuser
@@ -171,7 +171,7 @@ def generate_timeseries_from_wofs_ls(
         raise
 
     id_field = guess_id_field(polygons_gdf, use_id)
-    _log.debug(f"Guessed ID field: {id_field}")
+    _log.info(f"Guessed ID field: {id_field}")
 
     polygons_gdf.set_index(id_field, inplace=True)
 
@@ -217,6 +217,7 @@ def generate_timeseries_from_wofs_ls(
     # Connect to the datacube
     dc = datacube.Datacube(app="deafricawaterbodies-timeseries")
 
+    polygon_ids = tqdm(polygon_ids)
     for poly_id in polygon_ids:
         # Polygon's timeseries file path.
         poly_timeseries_fp = os.path.join(output_directory, poly_id[:4], f'{poly_id}.csv')
@@ -227,6 +228,7 @@ def generate_timeseries_from_wofs_ls(
             start_date_str = start_date.strftime('%Y-%m-%d')
 
         time_range = (start_date_str, end_date_str)
+        _log.info(f"Generating timeseries for polygon {poly_id} for the time range {time_range}")
 
         poly_geom = polygons_gdf.loc[poly_id].geometry
         poly_gdf = gpd.GeoDataFrame(geometry=[poly_geom], crs=output_crs)
