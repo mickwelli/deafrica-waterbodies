@@ -1,11 +1,8 @@
 import os
-import logging
 import s3urls
 import urllib
 import boto3
 from botocore.exceptions import ClientError
-
-_log = logging.getLogger(__name__)
 
 
 def check_if_s3_uri(file_path: str):
