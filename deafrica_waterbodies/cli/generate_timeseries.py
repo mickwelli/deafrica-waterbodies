@@ -48,11 +48,6 @@ from deafrica_waterbodies.waterbodies.timeseries.make_timeseries import generate
               "in the --output-directory directory. The default option is to run "
               "every waterbody polygon in the --waterbodies-vector-file file, and overwrite "
               "any existing csv files.")
-@click.option("--product-version",
-              type=str,
-              default="0.0.1",
-              show_default=True,
-              help="Product version for the DE Africa Waterbodies product.")
 @click.option("--subset-polygon-ids",
               default=None,
               help="List of polygon ids in the --waterbodies-vector-file "
@@ -66,7 +61,6 @@ def generate_timeseries(
     start_date,
     end_date,
     missing_only,
-    product_version,
     subset_polygon_ids,
     verbose
 ):
@@ -87,7 +81,6 @@ def generate_timeseries(
     generate_timeseries_from_wofs_ls(
         waterbodies_vector_file=waterbodies_vector_file,
         output_directory=output_directory,
-        product_version=product_version,
         use_id=use_id,
         missing_only=missing_only,
         time_span=time_span,
