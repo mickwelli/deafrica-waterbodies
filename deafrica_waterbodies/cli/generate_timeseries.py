@@ -48,6 +48,13 @@ from deafrica_waterbodies.waterbodies.timeseries.make_timeseries import generate
               "in the --output-directory directory. The default option is to run "
               "every waterbody polygon in the --waterbodies-vector-file file, and overwrite "
               "any existing csv files.")
+@click.option('--include-uncertainity/--do-not-include-uncertainity',
+              default=True,
+              help="Option to include uncertainities in the output timeseries."
+              "If you specify --include-uncertainity then you will only "
+              "filter out timesteps with 100% invalid pixels. Else you will "
+              "filter out timesteps with more than 10% invalid pixels"
+)
 @click.option("--subset-polygon-ids",
               default=None,
               help="List of polygon ids in the --waterbodies-vector-file "
@@ -86,5 +93,6 @@ def generate_timeseries(
         time_span=time_span,
         start_date=start_date_dt,
         end_date=end_date_dt,
-        subset_polygons_ids=subset_polygon_ids
+        subset_polygons_ids=subset_polygon_ids,
+        include_uncertainity=include_uncertainity,
     )

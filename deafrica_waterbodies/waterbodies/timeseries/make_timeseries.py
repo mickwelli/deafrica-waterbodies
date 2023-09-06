@@ -139,7 +139,7 @@ def generate_timeseries_from_wofs_ls(
         start_date: datetime.datetime = None,
         end_date: datetime.datetime = None,
         subset_polygons_ids: [str] = [],
-        # include_uncertainity: bool = False # not implemented
+        include_uncertainity: bool = True,
         ):
     """
     Function to generate a timeseries csv file for each waterbody polygon in the
@@ -173,7 +173,11 @@ def generate_timeseries_from_wofs_ls(
     subset_polygons_ids : [str], optional
         A list of ids of the waterbodies to generate the timeseries for from
         the waterbodies in `waterbodies_vector_file`.
-
+    include_uncertainity: bool, optional
+        Option to include uncertainities in the output timeseries. If you
+        specify `include_uncertainity=True` then you will only filter out
+        timesteps with 100% invalid pixels. If `include_uncertainity=False`
+        you will filter out timesteps with more than 10% invalid pixels.
     """
 
     # We will be using wofs_ls data.
@@ -227,13 +231,12 @@ def generate_timeseries_from_wofs_ls(
     if time_span != "append":
         _log.info(f"Generating timeseries for the time range: {start_date_str} to {end_date_str}.")
 
-    # TODO: Add filter for uncertainity
-    #if include_uncertainity:
+    if include_uncertainity:
         # Only filter out timesteps with 100% invalid pixels.
-        #invalid_percent_threshold = 100
-    #else:
+        invalid_percent_threshold = 100
+    else:
         # Filter out timesteps with less than 90% valid pixels.
-        #invalid_percent_threshold = 10
+        invalid_percent_threshold = 10
 
     # Connect to the datacube
     dc = datacube.Datacube(app="deafricawaterbodies-timeseries")
@@ -301,8 +304,11 @@ def generate_timeseries_from_wofs_ls(
 
                 poly_timeseries_data_dict = {
                     "Observation Date": [],
+                    #"Total pixel count": [],
                     "Wet pixel percentage": [],
                     "Wet pixel count": [],
+                    "Dry pixel percentage": [],
+                    "Dry pixel count": [],
                     "Invalid pixel percentage": [],
                     "Invalid pixel count": [],
                     }
@@ -335,18 +341,36 @@ def generate_timeseries_from_wofs_ls(
                     except ZeroDivisionError:
                         valid_and_wet_percentage = 0
                     try:
+                        valid_and_dry_percentage = (valid_and_dry_count / pixel_count) * 100
+                    except ZeroDivisionError:
+                        valid_and_dry_percentage = 0
+                    try:
                         invalid_percentage = (invalid_count / pixel_count) * 100
                     except ZeroDivisionError:
                         invalid_percentage = 0
+
+                    # Filter the timesteps based on the invalid pixel percentage
+                    # threshold.
+                    # If above threshold, set timeseries values for the timestep
+                    # as empty string.
+                    if invalid_percentage >= invalid_percent_threshold:
+                        valid_and_wet_percentage = ""
+                        valid_and_wet_count = ""
+                        valid_and_dry_percentage = ""
+                        valid_and_dry_count = ""
+                        invalid_percentage = ""
+                        invalid_count = ""
 
                     # Convert the timestep date from numpy.datetime64 to string.
                     observation_date = pd.to_datetime(timestep)
                     observation_date_str = observation_date.strftime('%Y-%m-%d')
 
                     poly_timeseries_data_dict["Observation Date"].extend([observation_date_str])
-                    poly_timeseries_data_dict["Total pixel count"].extend([pixel_count])
+                    #poly_timeseries_data_dict["Total pixel count"].extend([pixel_count])
                     poly_timeseries_data_dict["Wet pixel percentage"].extend([valid_and_wet_percentage])
                     poly_timeseries_data_dict["Wet pixel count"].extend([valid_and_wet_count])
+                    poly_timeseries_data_dict["Dry pixel percentage"].extend([valid_and_dry_percentage])
+                    poly_timeseries_data_dict["Dry pixel count"].extend([valid_and_dry_count])
                     poly_timeseries_data_dict["Invalid pixel percentage"].extend([invalid_percentage])
                     poly_timeseries_data_dict["Invalid pixel count"].extend([invalid_count])
 
