@@ -226,7 +226,7 @@ def generate_timeseries_from_wofs_ls(
             start_date_str = start_date.strftime('%Y-%m-%d')
 
         time_range = (start_date_str, end_date_str)
-        _log.info(f"Generating timeseries for polygon {poly_id} for the time range {time_range}")
+        _log.info(f"Generating timeseries for {poly_id} for the time range: {time_range[0]} to {time_range[1]}")
 
         poly_geom = polygons_gdf.loc[poly_id].geometry
         poly_gdf = gpd.GeoDataFrame(geometry=[poly_geom], crs=output_crs)
