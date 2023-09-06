@@ -6,7 +6,6 @@ import datacube
 import numpy as np
 import pandas as pd
 import geopandas as gpd
-from tqdm.auto import tqdm
 from datacube.utils.geometry import Geometry
 
 from deafrica_tools.datahandling import wofs_fuser
@@ -217,7 +216,6 @@ def generate_timeseries_from_wofs_ls(
     # Connect to the datacube
     dc = datacube.Datacube(app="deafricawaterbodies-timeseries")
 
-    polygon_ids = tqdm(polygon_ids)
     for poly_id in polygon_ids:
         # Polygon's timeseries file path.
         poly_timeseries_fp = os.path.join(output_directory, poly_id[:4], f'{poly_id}.csv')
