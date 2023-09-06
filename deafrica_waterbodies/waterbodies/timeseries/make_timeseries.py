@@ -6,6 +6,7 @@ import datacube
 import numpy as np
 import pandas as pd
 import geopandas as gpd
+from tqdm.auto import tqdm
 from datacube.utils.geometry import Geometry
 
 from deafrica_tools.datahandling import wofs_fuser
@@ -199,11 +200,15 @@ def generate_timeseries_from_wofs_ls(
             start_date_str = "1984"
             end_date_str = datetime.datetime.now().strftime("%Y-%m-%d")
     elif time_span == "append":
-        # Start date will be defined in loop.
+        # Start date will be defined in polygons_id loop.
         end_date_str = datetime.datetime.now().strftime("%Y-%m-%d")
     elif time_span == "custom":
         start_date_str = start_date.strftime("%Y-%m-%d")
         end_date_str = end_date.strftime("%Y-%m-%d")
+
+    # For logging purposes only.
+    if time_span != "append":
+        _log.info(f"Generating timeseries for the time range: {start_date_str} to {end_date_str}.")
 
     # TODO: Add filter for uncertainity
     #if include_uncertainity:
@@ -216,123 +221,126 @@ def generate_timeseries_from_wofs_ls(
     # Connect to the datacube
     dc = datacube.Datacube(app="deafricawaterbodies-timeseries")
 
-    for poly_id in polygon_ids:
-        # Polygon's timeseries file path.
-        poly_timeseries_fp = os.path.join(output_directory, poly_id[:4], f'{poly_id}.csv')
-
-        if time_span == "append":
-            last_observation_date = get_last_observation_date_from_csv(poly_timeseries_fp)
-            start_date = last_observation_date + dateutil.relativedelta.relativedelta(days=1)
-            start_date_str = start_date.strftime('%Y-%m-%d')
-
-        time_range = (start_date_str, end_date_str)
-        _log.info(f"Generating timeseries for {poly_id} for the time range: {time_range[0]} to {time_range[1]}")
-
-        poly_geom = polygons_gdf.loc[poly_id].geometry
-        poly_gdf = gpd.GeoDataFrame(geometry=[poly_geom], crs=output_crs)
-        poly_geopolygon = Geometry(geom=poly_geom, crs=output_crs)
-
-        # Load the Water Observations from Space.
-        wofls_ds = dc.load(
-            product="wofs_ls",
-            geopolygon=poly_geopolygon,
-            time=time_range,
-            resolution=resolution,
-            output_crs=output_crs,
-            resampling="nearest",
-            group_by="solar_day",
-            fuse_func=wofs_fuser,
-        )
-        wofls_da = wofls_ds.water
-
-        # If no data is found.
-        if not wofls_ds:
-            _log.debug(f'There is no new data for {poly_id} in the time range {time_range}.')
-            continue
-        else:
-            # Mask the loaded WOfS data using the rasterized waterbody polygon,
-            # if the height and width of the bounding box of the waterbody polygon
-            # are large than the length of a pixel.
-            pixel_length = resolution[1]  # should be a positive number.
-            if poly_geopolygon.boundingbox.height > pixel_length and poly_geopolygon.boundingbox.width > pixel_length:
-                poly_mask = xr_rasterize(poly_gdf, wofls_da)
-                wofls_da_masked = wofls_da.where(poly_mask, np.nan)
-            else:
-                wofls_da_masked = wofls_da
-
-            # Get the area of water in the waterbody for each timestep.
-
-            timesteps = list(wofls_da_masked.time.values)
-
-            poly_timeseries_data_dict = {
-                "Observation Date": [],
-                "Total pixel count": [],
-                "Wet pixel percentage": [],
-                "Wet pixel count": [],
-                "Dry pixel percentage": [],
-                "Dry pixel count": [],
-                "Invalid pixel percentage": [],
-                "Invalid pixel count": [],
-                }
-            for timestep in timesteps:
-                wofl = wofls_da_masked.sel(time=timestep)
-
-                # Number of pixels in the timestep for the water body.
-                pixel_count = np.count_nonzero(np.isnan(wofl))
-
-                # Apply WOfS bitmasking to the Water Observation Feature Layers
-                # See: the  Applying WOfS Bitmasking notebook in the
-                # Frequently_used_code folder in the
-                # digitalearthafrica/deafrica-sandbox-notebooks Github repository.
-
-                # Number of pixels observed to be valid (clear) and dry.
-                valid_and_dry_count = np.count_nonzero(wofl == 0)
-
-                # Number of pixels observed to be valid (clear) and wet.
-                valid_and_wet_count = np.count_nonzero(wofl == 128)
-
-                # Number of valid (clear) pixels.
-                valid_count = valid_and_dry_count + valid_and_wet_count
-
-                # Number of invalid (not clear) pixels.
-                invalid_count = pixel_count - valid_count
-
-                # Convert the counts into percentages.
-                try:
-                    valid_and_wet_percentage = (valid_and_wet_count / pixel_count) * 100
-                except ZeroDivisionError:
-                    valid_and_wet_percentage = 0
-
-                try:
-                    valid_and_dry_percentage = (valid_and_dry_count / pixel_count) * 100
-                except ZeroDivisionError:
-                    valid_and_dry_percentage = 0
-
-                try:
-                    invalid_percentage = (invalid_count / pixel_count) * 100
-                except ZeroDivisionError:
-                    invalid_percentage = 0
-
-                # Convert the timestep date from numpy.datetime64 to string.
-                observation_date = pd.to_datetime(timestep)
-                observation_date_str = observation_date.strftime('%Y-%m-%d')
-
-                poly_timeseries_data_dict["Observation Date"].extend([observation_date_str])
-                poly_timeseries_data_dict["Total pixel count"].extend([pixel_count])
-                poly_timeseries_data_dict["Wet pixel percentage"].extend([valid_and_wet_percentage])
-                poly_timeseries_data_dict["Wet pixel count"].extend([valid_and_wet_count])
-                poly_timeseries_data_dict["Dry pixel percentage"].extend([valid_and_dry_percentage])
-                poly_timeseries_data_dict["Dry pixel count"].extend([valid_and_dry_count])
-                poly_timeseries_data_dict["Invalid pixel percentage"].extend([invalid_percentage])
-                poly_timeseries_data_dict["Invalid pixel count"].extend([invalid_count])
-
-            # Convert the timeseries data dictionary for the polygon into
-            # a DataFrame.
-            poly_timeseries_df = pd.DataFrame(poly_timeseries_data_dict)
+    with tqdm(total=len(polygon_ids)) as bar:
+        for poly_id in polygon_ids:
+            # Polygon's timeseries file path.
+            poly_timeseries_fp = os.path.join(output_directory, poly_id[:4], f'{poly_id}.csv')
 
             if time_span == "append":
-                # Append the DataFrame to an existing csv file.
-                poly_timeseries_df.to_csv(poly_timeseries_fp, mode='a', index=False, header=False)
+                last_observation_date = get_last_observation_date_from_csv(poly_timeseries_fp)
+                start_date = last_observation_date + dateutil.relativedelta.relativedelta(days=1)
+                start_date_str = start_date.strftime('%Y-%m-%d')
+
+            time_range = (start_date_str, end_date_str)
+            _log.debug(f"Generating timeseries for {poly_id} for the time range: {time_range[0]} to {time_range[1]}.")
+
+            poly_geom = polygons_gdf.loc[poly_id].geometry
+            poly_gdf = gpd.GeoDataFrame(geometry=[poly_geom], crs=output_crs)
+            poly_geopolygon = Geometry(geom=poly_geom, crs=output_crs)
+
+            # Load the Water Observations from Space.
+            wofls_ds = dc.load(
+                product="wofs_ls",
+                geopolygon=poly_geopolygon,
+                time=time_range,
+                resolution=resolution,
+                output_crs=output_crs,
+                resampling="nearest",
+                group_by="solar_day",
+                fuse_func=wofs_fuser,
+            )
+            wofls_da = wofls_ds.water
+
+            # If no data is found.
+            if not wofls_ds:
+                _log.info(f"There is no new data for {poly_id} for the time range: {time_range[0]} to {time_range[1]}.")
+                continue
             else:
-                # Write the DataFrame to a new csv file.
-                poly_timeseries_df.to_csv(poly_timeseries_fp)
+                # Mask the loaded WOfS data using the rasterized waterbody polygon,
+                # if the height and width of the bounding box of the waterbody polygon
+                # are large than the length of a pixel.
+                pixel_length = resolution[1]  # should be a positive number.
+                if poly_geopolygon.boundingbox.height > pixel_length and poly_geopolygon.boundingbox.width > pixel_length:
+                    poly_mask = xr_rasterize(poly_gdf, wofls_da)
+                    wofls_da_masked = wofls_da.where(poly_mask, np.nan)
+                else:
+                    wofls_da_masked = wofls_da
+
+                # Get the area of water in the waterbody for each timestep.
+
+                timesteps = list(wofls_da_masked.time.values)
+
+                poly_timeseries_data_dict = {
+                    "Observation Date": [],
+                    "Total pixel count": [],
+                    "Wet pixel percentage": [],
+                    "Wet pixel count": [],
+                    "Dry pixel percentage": [],
+                    "Dry pixel count": [],
+                    "Invalid pixel percentage": [],
+                    "Invalid pixel count": [],
+                    }
+                for timestep in timesteps:
+                    wofl = wofls_da_masked.sel(time=timestep)
+
+                    # Number of pixels in the timestep for the water body.
+                    pixel_count = np.count_nonzero(np.isnan(wofl))
+
+                    # Apply WOfS bitmasking to the Water Observation Feature Layers
+                    # See: the  Applying WOfS Bitmasking notebook in the
+                    # Frequently_used_code folder in the
+                    # digitalearthafrica/deafrica-sandbox-notebooks Github repository.
+
+                    # Number of pixels observed to be valid (clear) and dry.
+                    valid_and_dry_count = np.count_nonzero(wofl == 0)
+
+                    # Number of pixels observed to be valid (clear) and wet.
+                    valid_and_wet_count = np.count_nonzero(wofl == 128)
+
+                    # Number of valid (clear) pixels.
+                    valid_count = valid_and_dry_count + valid_and_wet_count
+
+                    # Number of invalid (not clear) pixels.
+                    invalid_count = pixel_count - valid_count
+
+                    # Convert the counts into percentages.
+                    try:
+                        valid_and_wet_percentage = (valid_and_wet_count / pixel_count) * 100
+                    except ZeroDivisionError:
+                        valid_and_wet_percentage = 0
+
+                    try:
+                        valid_and_dry_percentage = (valid_and_dry_count / pixel_count) * 100
+                    except ZeroDivisionError:
+                        valid_and_dry_percentage = 0
+
+                    try:
+                        invalid_percentage = (invalid_count / pixel_count) * 100
+                    except ZeroDivisionError:
+                        invalid_percentage = 0
+
+                    # Convert the timestep date from numpy.datetime64 to string.
+                    observation_date = pd.to_datetime(timestep)
+                    observation_date_str = observation_date.strftime('%Y-%m-%d')
+
+                    poly_timeseries_data_dict["Observation Date"].extend([observation_date_str])
+                    poly_timeseries_data_dict["Total pixel count"].extend([pixel_count])
+                    poly_timeseries_data_dict["Wet pixel percentage"].extend([valid_and_wet_percentage])
+                    poly_timeseries_data_dict["Wet pixel count"].extend([valid_and_wet_count])
+                    poly_timeseries_data_dict["Dry pixel percentage"].extend([valid_and_dry_percentage])
+                    poly_timeseries_data_dict["Dry pixel count"].extend([valid_and_dry_count])
+                    poly_timeseries_data_dict["Invalid pixel percentage"].extend([invalid_percentage])
+                    poly_timeseries_data_dict["Invalid pixel count"].extend([invalid_count])
+
+                # Convert the timeseries data dictionary for the polygon into
+                # a DataFrame.
+                poly_timeseries_df = pd.DataFrame(poly_timeseries_data_dict)
+
+                if time_span == "append":
+                    # Append the DataFrame to an existing csv file.
+                    poly_timeseries_df.to_csv(poly_timeseries_fp, mode='a', index=False, header=False)
+                else:
+                    # Write the DataFrame to a new csv file.
+                    poly_timeseries_df.to_csv(poly_timeseries_fp)
+            bar.update(1)
+        _log.info(f"Done! Generated timeseries for {len(polygon_ids)}.")
