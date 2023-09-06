@@ -132,6 +132,7 @@ def get_last_observation_date_from_csv(csv_file_path: str) -> pd.Timestamp:
 def generate_timeseries_from_wofs_ls(
         waterbodies_vector_file: str,
         output_directory: str,
+        product_version: str,
         use_id: str,
         missing_only: bool = False,
         time_span: str = "all",
@@ -153,6 +154,8 @@ def generate_timeseries_from_wofs_ls(
         for.
     output_directory : str
         File URI or S3 URI of the directory to write the timeseries csv files to.
+    product_version : str
+        DE Africa Waterbodies product version.
     use_id : str
         Name of the column/field in the waterbody polygon vector file containing
         the unique key identifier for each waterbody polygon.
@@ -174,6 +177,8 @@ def generate_timeseries_from_wofs_ls(
         the waterbodies in `waterbodies_vector_file`.
 
     """
+
+    product_version = product_version.replace(".", "-")
 
     # We will be using wofs_ls data.
     output_crs = "EPSG:6933"
@@ -240,7 +245,7 @@ def generate_timeseries_from_wofs_ls(
     with tqdm(total=len(polygon_ids)) as bar:
         for poly_id in polygon_ids:
             # Polygon's timeseries file path.
-            poly_timeseries_fp = os.path.join(output_directory, poly_id[:4], f'{poly_id}.csv')
+            poly_timeseries_fp = os.path.join(output_directory, poly_id[:4], f'{poly_id}_v{product_version[0]}.csv')
 
             if time_span == "append":
                 last_observation_date = get_last_observation_date_from_csv(poly_timeseries_fp)
