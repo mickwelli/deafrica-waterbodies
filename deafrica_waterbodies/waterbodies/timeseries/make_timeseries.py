@@ -47,9 +47,17 @@ def get_polygon_ids_for_missing_timeseries(
     is_s3_uri = check_if_s3_uri(output_directory)
 
     if not is_s3_uri:
-        check_local_dir_exists(output_directory, error_if_exists=False)
+        try:
+            check_local_dir_exists(output_directory, error_if_exists=False)
+        except Exception as error:
+            _log.error(error)
+            raise
     else:
-        check_s3_object_exists(output_directory, error_if_exists=False)
+        try:
+            check_s3_object_exists(output_directory, error_if_exists=False)
+        except Exception as error:
+            _log.error(error)
+            raise
 
     polygons_wthout_timeseries = []
     for polygon_id in polygon_ids:
@@ -62,12 +70,12 @@ def get_polygon_ids_for_missing_timeseries(
         if not is_s3_uri:
             try:
                 check_local_file_exists(timeseries_fp, error_if_exists=False)
-            except:  # noqa: E722
+            except FileNotFoundError:
                 polygons_wthout_timeseries.append(polygon_id)
         else:
             try:
                 check_s3_object_exists(timeseries_fp)
-            except:  # noqa: E722
+            except FileNotFoundError:
                 polygons_wthout_timeseries.append(polygon_id)
 
     return polygons_wthout_timeseries
@@ -94,9 +102,17 @@ def get_last_observation_date_from_csv(csv_file_path: str) -> pd.Timestamp:
     is_s3_uri = check_if_s3_uri(csv_file_path)
 
     if is_s3_uri:
-        check_s3_object_exists(csv_file_path, error_if_exists=False)
+        try:
+            check_s3_object_exists(csv_file_path, error_if_exists=False)
+        except Exception as error:
+            _log.error(error)
+            raise
     else:
-        check_local_file_exists(csv_file_path, error_if_exists=False)
+        try:
+            check_local_file_exists(csv_file_path, error_if_exists=False)
+        except Exception as error:
+            _log.error(error)
+            raise
 
     # Read file using pandas.
     # Should work for s3 files also.
