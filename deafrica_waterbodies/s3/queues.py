@@ -341,7 +341,7 @@ def push_to_queue_from_txt(
                                             queue_url=queue_url,
                                             messages=messages,
                                             count=count)
-    
+
     # Post the remaining messages, if there are any.
     if len(messages) > 0:
         _post_messages_batch(sqs_client=sqs_client,
