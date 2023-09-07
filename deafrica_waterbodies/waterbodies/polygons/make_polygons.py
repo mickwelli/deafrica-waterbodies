@@ -18,8 +18,8 @@ import geopandas as gpd
 from datacube.utils.geometry import Geometry
 from deafrica_tools.spatial import xr_vectorize
 
-from .attributes import assign_unique_ids
-from .filters import filter_geodataframe_by_intersection, filter_waterbodies
+from deafrica_waterbodies.waterbodies.polygons.attributes import assign_unique_ids
+from deafrica_waterbodies.waterbodies.polygons.filters import filter_geodataframe_by_intersection, filter_waterbodies
 
 
 _log = logging.getLogger(__name__)
@@ -48,7 +48,7 @@ def get_product_regions(product: str):
         return regions
     except Exception as error:
         _log.error(error)
-        raise
+        raise error
 
 
 def get_product_tiles(product="wofs_ls_summary_alltime", aoi_gdf=None):
