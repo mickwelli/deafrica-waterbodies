@@ -1,4 +1,6 @@
 import os
+import boto3
+import botocore
 import urllib
 import logging
 import datetime
@@ -21,7 +23,8 @@ _log = logging.getLogger(__name__)
 
 def get_polygon_ids_for_missing_timeseries(
         polygons_gdf: gpd.GeoDataFrame,
-        output_directory: str) -> [str]:
+        output_directory: str,
+        s3_client: botocore.client.S3 = None) -> [str]:
     """
     Get IDs for polygons whose timeseries .csv file does not exist
     in the output directory.
@@ -34,6 +37,8 @@ def get_polygon_ids_for_missing_timeseries(
     output_directory : str
         File URI or S3 URI of the directory containing the waterbody timeseries
         files.
+    s3_client : botocore.client.S3
+        A low-level client representing Amazon Simple Storage Service (S3), by default None.
 
     Returns
     -------
@@ -42,23 +47,28 @@ def get_polygon_ids_for_missing_timeseries(
         directory.
     """
 
+    # Get the service client.
+    if s3_client is None:
+        s3_client = boto3.client("s3")
+
     polygon_ids = polygons_gdf.index.to_list()
 
     # Check if output_dir exists.
     is_s3_uri = check_if_s3_uri(output_directory)
 
-    if not is_s3_uri:
-        try:
+    try:
+        if is_s3_uri:
+            check_s3_object_exists(output_directory,
+                                   error_if_exists=False,
+                                   s3_client=s3_client)
+        else:
             check_local_dir_exists(output_directory, error_if_exists=False)
-        except Exception as error:
-            _log.error(error)
-            raise
-    else:
-        try:
-            check_s3_object_exists(output_directory, error_if_exists=False)
-        except Exception as error:
-            _log.error(error)
-            raise
+    except FileNotFoundError as error:
+        _log.exception(f"Could not find directory file {output_directory}!")
+        raise error
+    except PermissionError as error:
+        _log.exception(f"You do not have sufficient permissions to access {output_directory}!")
+        raise error
 
     polygons_wthout_timeseries = []
     for polygon_id in polygon_ids:
@@ -68,21 +78,24 @@ def get_polygon_ids_for_missing_timeseries(
         # Check if file exists.
         is_s3_uri = check_if_s3_uri(timeseries_fp)
 
-        if not is_s3_uri:
-            try:
+        try:
+            if is_s3_uri:
+                check_s3_object_exists(timeseries_fp,
+                                       error_if_exists=False,
+                                       s3_client=s3_client)
+            else:
                 check_local_file_exists(timeseries_fp, error_if_exists=False)
-            except FileNotFoundError:
-                polygons_wthout_timeseries.append(polygon_id)
-        else:
-            try:
-                check_s3_object_exists(timeseries_fp)
-            except FileNotFoundError:
-                polygons_wthout_timeseries.append(polygon_id)
+        except FileNotFoundError:
+            polygons_wthout_timeseries.append(polygon_id)
+        except PermissionError:
+            _log.exception(f"You do not have sufficient permissions to access {timeseries_fp}!")
 
     return polygons_wthout_timeseries
 
 
-def get_last_observation_date_from_csv(csv_file_path: str) -> pd.Timestamp:
+def get_last_observation_date_from_csv(
+        csv_file_path: str,
+        s3_client: botocore.client.S3 = None) -> pd.Timestamp:
     """
     Get the date of the last observation from a water body polygon's
     timeseries csv file.
@@ -91,6 +104,8 @@ def get_last_observation_date_from_csv(csv_file_path: str) -> pd.Timestamp:
     ----------
     csv_file_path : str
         S3 URI or File URI of the timeseries csv file for a waterbody polygon.
+    s3_client : botocore.client.S3
+        A low-level client representing Amazon Simple Storage Service (S3), by default None.
 
     Returns
     -------
@@ -98,22 +113,23 @@ def get_last_observation_date_from_csv(csv_file_path: str) -> pd.Timestamp:
         Date of the last observation from a water body polygon's timeseries
         file.
     """
+    # Get the service client.
+    if s3_client is None:
+        s3_client = boto3.client("s3")
 
     # Check if the file exists.
     is_s3_uri = check_if_s3_uri(csv_file_path)
 
-    if is_s3_uri:
-        try:
-            check_s3_object_exists(csv_file_path, error_if_exists=False)
-        except Exception as error:
-            _log.error(error)
-            raise
-    else:
-        try:
+    try:
+        if is_s3_uri:
+            check_s3_object_exists(csv_file_path,
+                                   error_if_exists=False,
+                                   s3_client=s3_client)
+        else:
             check_local_file_exists(csv_file_path, error_if_exists=False)
-        except Exception as error:
-            _log.error(error)
-            raise
+    except Exception as error:
+        _log.exception(error)
+        raise error
 
     # Read file using pandas.
     # Should work for s3 files also.
@@ -179,6 +195,8 @@ def generate_timeseries_from_wofs_ls(
         timesteps with 100% invalid pixels. If `include_uncertainity=False`
         you will filter out timesteps with more than 10% invalid pixels.
     """
+    # Get the service client.
+    s3_client = boto3.client("s3")
 
     # We will be using wofs_ls data.
     output_crs = "EPSG:6933"
@@ -188,8 +206,8 @@ def generate_timeseries_from_wofs_ls(
     try:
         polygons_gdf = gpd.read_file(waterbodies_vector_file)
     except Exception as error:
-        _log.error(error)
-        raise
+        _log.exception(error)
+        raise error
 
     id_field = guess_id_field(polygons_gdf, use_id)
     _log.info(f"Guessed ID field: {id_field}")
@@ -203,7 +221,9 @@ def generate_timeseries_from_wofs_ls(
 
     # Get the IDs for the waterbody polygons.
     if missing_only:
-        polygon_ids = get_polygon_ids_for_missing_timeseries(polygons_gdf, output_directory)
+        polygon_ids = get_polygon_ids_for_missing_timeseries(polygons_gdf,
+                                                             output_directory,
+                                                             s3_client=s3_client)
     else:
         polygon_ids = polygons_gdf.index.to_list()
 
@@ -211,6 +231,7 @@ def generate_timeseries_from_wofs_ls(
     valid_time_span_options = ["all", "custom", "append"]
 
     if time_span not in valid_time_span_options:
+        _log.error(f"{time_span} is an invalid time span.")
         raise ValueError(f"Please select a valid time span option: {' '.join(valid_time_span_options)}")
 
     # Checks.
@@ -259,7 +280,7 @@ def generate_timeseries_from_wofs_ls(
             poly_timeseries_fp = os.path.join(output_directory, poly_id[:4], csv_file)
 
             if time_span == "append":
-                last_observation_date = get_last_observation_date_from_csv(poly_timeseries_fp)
+                last_observation_date = get_last_observation_date_from_csv(poly_timeseries_fp, s3_client)
                 start_date = last_observation_date + dateutil.relativedelta.relativedelta(days=1)
                 start_date_str = start_date.strftime('%Y-%m-%d')
 
