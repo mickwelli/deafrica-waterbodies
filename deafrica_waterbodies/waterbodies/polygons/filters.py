@@ -210,6 +210,7 @@ def filter_waterbodies(
     if filter_out_ocean_polygons:
         _log.info("Filtering out ocean waterbody polygons")
         if land_sea_mask_fp is None:
+            _log.error("No vector file path provided for land and sea mask.")
             error_msg = 'Please provide a file path to the dataset you wish to use ' \
                 'to filter out ocean polygons. The dataset needs to be a vector dataset, ' \
                 'and able to be read in by the fiona python library. '
@@ -218,8 +219,8 @@ def filter_waterbodies(
             try:
                 land_sea_mask = gpd.read_file(land_sea_mask_fp).to_crs(crs)
             except Exception as error:
-                _log.error(error)
-                raise
+                _log.exception(error)
+                raise error
             ocean_filtered_primary, _ = filter_geodataframe_by_intersection(area_filtered_primary, land_sea_mask, invert_mask=True)
             ocean_filtered_secondary, _ = filter_geodataframe_by_intersection(area_filtered_secondary, land_sea_mask, invert_mask=True)
     else:
@@ -230,6 +231,7 @@ def filter_waterbodies(
     if filter_out_urban_polygons:
         _log.info("Filtering out urban/CBD areas from waterbody polygons")
         if urban_mask_fp is None:
+            _log.error("No vector file path provided for urban mask.")
             error_msg = 'Please provide a file path to the dataset you wish to use ' \
                 'to filter out urban/CBD area polygons. The dataset needs to be a vector dataset, ' \
                 'and able to be read in by the fiona python library. '
@@ -238,8 +240,8 @@ def filter_waterbodies(
             try:
                 urban_mask = gpd.read_file(urban_mask_fp).to_crs(crs)
             except Exception as error:
-                _log.error(error)
-                raise
+                _log.exception(error)
+                raise error
             cbd_filtered_primary = filter_geodataframe_by_intersection(ocean_filtered_primary, urban_mask)
             cbd_filtered_secondary = ocean_filtered_secondary
     else:
@@ -270,6 +272,7 @@ def filter_waterbodies(
     if filter_out_major_rivers_polygons:
         _log.info("Filtering out major rivers from the waterbodies.")
         if major_rivers_mask_fp is None:
+            _log.error("No vector file path provided for major rivers mask.")
             error_msg = 'Please provide a file path to the dataset you wish to use ' \
                 'to filter out major rivers. The dataset needs to be a vector dataset, ' \
                 'and able to be read in by the fiona python library. '
@@ -278,7 +281,7 @@ def filter_waterbodies(
             try:
                 major_rivers = gpd.read_file(major_rivers_mask_fp).to_crs(crs)
             except Exception as error:
-                _log.error(error)
+                _log.exception(error)
                 raise
             major_rivers_filtered, _ = filter_geodataframe_by_intersection(merged_combined_polygons, major_rivers)
     else:
@@ -295,5 +298,5 @@ def filter_waterbodies(
     large_polygons_handled["area"] = large_polygons_handled.area
     filtered_polygons = large_polygons_handled.loc[((large_polygons_handled['area'] > min_polygon_size) & (large_polygons_handled['area'] <= max_polygon_size))]
 
-    # Return a GeoDataFrame with the geometry column only. 
+    # Return a GeoDataFrame with the geometry column only.
     return filtered_polygons[["geometry"]]
