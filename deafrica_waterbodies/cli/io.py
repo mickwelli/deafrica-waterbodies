@@ -6,8 +6,9 @@ import boto3
 import uuid
 import shutil
 import logging
-import botocore
+import geopandas as gpd
 from botocore.client import ClientError
+from mypy_boto3_s3 import S3Client
 
 from deafrica_waterbodies.waterbodies.timeseries.io import check_s3_bucket_exists
 
@@ -20,7 +21,7 @@ def upload_file_to_s3(
         file_name: str,
         bucket_name: str,
         object_name: str = None,
-        s3_client: botocore.client.S3 = None):
+        s3_client: S3Client = None) -> bool:
     """
     Upload a file to an S3 bucket.
 
@@ -33,7 +34,7 @@ def upload_file_to_s3(
         Name of the s3 bucket to upload to.
     object_name : str, optional
         S3 object name. If not specified then `file_name` is used, by default None
-    s3_client : botocore.client.S3
+    s3_client : S3Client
         A low-level client representing Amazon Simple Storage Service (S3), by default None.
 
     Returns
@@ -61,13 +62,34 @@ def upload_file_to_s3(
 
 
 def write_waterbodies_to_file(
-        waterbodies_gdf,
-        product_version,
-        storage_location,
-        output_bucket_name,
-        output_local_folder,
-        output_file_name,
-        output_file_type):
+        waterbodies_gdf: gpd.GeoDataFrame,
+        product_version: str,
+        storage_location: str,
+        output_bucket_name: str,
+        output_local_folder: str,
+        output_file_name: str,
+        output_file_type: str):
+    """
+    Function to GeoDataFrame of waterbody polygons to an ESRI Shapefile or GeoJSON file.
+
+    Parameters
+    ----------
+    waterbodies_gdf : gpd.GeoDataFrame
+        The waterbody polygons.
+    product_version : str
+        The DE Africa Waterbodies product version number.
+    storage_location : str
+        Type of storage location. Either "local" or "s3".
+    output_bucket_name : str
+        The name of the S3 Bucket to write the polygons to.
+    output_local_folder : str
+        The file path of the local folder to write the polygons to.
+    output_file_name : str
+        The name of the file to write the waterbody polygons to.
+    output_file_type : str
+        File type to write the polygons to. Either "GeoJSON" or "ESRI Shapefile"
+
+    """
 
     # Validate output file type.
     valid_output_file_type = ['GeoJSON', 'Shapefile']

@@ -1,6 +1,5 @@
 import os
 import boto3
-import botocore
 import urllib
 import logging
 import datetime
@@ -12,7 +11,7 @@ import pandas as pd
 import geopandas as gpd
 from tqdm.auto import tqdm
 from datacube.utils.geometry import Geometry
-
+from mypy_boto3_s3.client import S3Client
 from deafrica_tools.datahandling import wofs_fuser
 from deafrica_tools.spatial import xr_rasterize
 
@@ -25,7 +24,7 @@ _log = logging.getLogger(__name__)
 def get_polygon_ids_for_missing_timeseries(
         polygons_gdf: gpd.GeoDataFrame,
         output_directory: str,
-        s3_client: botocore.client.S3 = None) -> [str]:
+        s3_client: S3Client = None) -> [str]:
     """
     Get IDs for polygons whose timeseries .csv file does not exist
     in the output directory.
@@ -38,7 +37,7 @@ def get_polygon_ids_for_missing_timeseries(
     output_directory : str
         File URI or S3 URI of the directory containing the waterbody timeseries
         files.
-    s3_client : botocore.client.S3
+    s3_client : S3Client
         A low-level client representing Amazon Simple Storage Service (S3), by default None.
 
     Returns
@@ -96,7 +95,7 @@ def get_polygon_ids_for_missing_timeseries(
 
 def get_last_observation_date_from_csv(
         csv_file_path: str,
-        s3_client: botocore.client.S3 = None) -> pd.Timestamp:
+        s3_client: S3Client = None) -> pd.Timestamp:
     """
     Get the date of the last observation from a water body polygon's
     timeseries csv file.
@@ -105,7 +104,7 @@ def get_last_observation_date_from_csv(
     ----------
     csv_file_path : str
         S3 URI or File URI of the timeseries csv file for a waterbody polygon.
-    s3_client : botocore.client.S3
+    s3_client : S3Client
         A low-level client representing Amazon Simple Storage Service (S3), by default None.
 
     Returns

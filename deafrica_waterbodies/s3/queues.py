@@ -11,9 +11,9 @@ import click
 import fsspec
 import logging
 import time
-import botocore
 from botocore.config import Config
 from botocore.exceptions import ClientError
+from mypy_boto3_sqs import SQSClient
 
 from deafrica_waterbodies.waterbodies.timeseries.io import check_if_s3_uri, check_s3_object_exists, check_local_file_exists
 
@@ -23,7 +23,7 @@ _log = logging.getLogger(__name__)
 # From the AWS Code Examples Repository
 # https://github.com/awsdocs/aws-doc-sdk-examples/tree/main/python/example_code/sqs#code-examples
 def get_queue_url(queue_name: str,
-                  sqs_client: botocore.client.SQS = None):
+                  sqs_client: SQSClient = None) -> str:
     """
     Get the URL of an existing Amazon SQS queue by name, e.g., alex-really-secret-queue
 
@@ -31,7 +31,7 @@ def get_queue_url(queue_name: str,
     ----------
     queue_name : str
         The name that was used to create the SQS queue.
-    sqs_client: botocore.client.SQS
+    sqs_client: SQSClient
         A low-level client representing Amazon Simple Queue Service (SQS), by default None
     Returns
     -------
@@ -56,7 +56,7 @@ def get_queue_url(queue_name: str,
 
 def get_queue_attribute(queue_name: str,
                         attribute_name: str,
-                        sqs_client: botocore.client.SQS = None):
+                        sqs_client: SQSClient = None) -> str:
     """
     Get the attribute value for the specified queue and attribute name.
 
@@ -66,7 +66,7 @@ def get_queue_attribute(queue_name: str,
         The name that was used to create the SQS queue.
     attribute_name : str
         The attribute for which to retrieve information.
-    sqs_client : botocore.client.SQS, optional
+    sqs_client : SQSClient, optional
         A low-level client representing Amazon Simple Queue Service (SQS), by default None
 
     Returns
@@ -114,7 +114,7 @@ def make_source_queue(
         dead_letter_queue_name: str,
         timeout: float = 2 * 60,
         retries: float = 5,
-        sqs_client: botocore.client.SQS = None):
+        sqs_client: SQSClient = None):
     """
     Creates an Amazon SQS queue.
 
@@ -129,7 +129,7 @@ def make_source_queue(
         The visibility timeout for the queue, in seconds, by default 2*60
     retries : float, optional
         Maximum number of retry attempts, by default 5
-    sqs_client : botocore.client.SQS, optional
+    sqs_client : SQSClient, optional
         A low-level client representing Amazon Simple Queue Service (SQS), by default None
 
     """
@@ -173,7 +173,7 @@ def make_source_queue(
 
 
 def delete_queue(queue_name: str,
-                 sqs_client: botocore.client.SQS = None):
+                 sqs_client: SQSClient = None):
     """
     Deletes a queue, regardless of the queue's contents.
 
@@ -181,7 +181,7 @@ def delete_queue(queue_name: str,
     ----------
     queue_name : str
         Name of the SQS queue to delete.
-    sqs_client : botocore.client.SQS, optional
+    sqs_client : SQSClient, optional
         A low-level client representing Amazon Simple Queue Service (SQS), by default None
     """
 
@@ -209,7 +209,7 @@ def delete_queue(queue_name: str,
 def move_to_deadletter_queue(
         deadletter_queue_name: str,
         message_body: str,
-        sqs_client: botocore.client.SQS = None):
+        sqs_client: SQSClient = None):
     """
     Deliver a message to the dead-letter SQS queue.
 
@@ -219,7 +219,7 @@ def move_to_deadletter_queue(
         The name of the deadletter SQS queue to receive the message.
     message_body : str
         The body text of the message.
-    sqs_client : botocore.client.SQS, optional
+    sqs_client : SQSClient, optional
         A low-level client representing Amazon Simple Queue Service (SQS), by default None
     """
 
@@ -245,10 +245,10 @@ def move_to_deadletter_queue(
 
 
 def _post_messages_batch(
-        sqs_client: botocore.client.SQS,
+        sqs_client: SQSClient,
         queue_url: str,
         messages: list,
-        count: int):
+        count: int) -> []:
     """
     Helper function for `push_to_queue_from_txt` function.
     Pushes a batch of 10 or less messages to the queue.
@@ -282,7 +282,7 @@ def _post_messages_batch(
 def push_to_queue_from_txt(
         text_file_path: str,
         queue_name: str,
-        sqs_client: botocore.client.SQS = None):
+        sqs_client: SQSClient = None):
     """
     Push lines of a text file to a SQS queue.
 
@@ -293,7 +293,7 @@ def push_to_queue_from_txt(
         SQS queue.
     queue_name : str
         Name of the SQS queue to push the lines of the text file to.
-    sqs_client : botocore.client.SQS, optional
+    sqs_client : SQSClient, optional
         A low-level client representing Amazon Simple Queue Service (SQS), by default None
     """
 

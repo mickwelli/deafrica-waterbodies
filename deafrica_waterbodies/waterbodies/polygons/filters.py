@@ -91,10 +91,21 @@ def filter_geodataframe_by_intersection(gpd_data,
         return gpd_data_filtered, intersect_index
 
 
-def pp_test_gdf(gdf):
+def pp_test_gdf(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
     Function to calculate the Polsby–Popper test values on a
     geopandas GeoDataFrame.
+
+    Parameters
+    ----------
+    gdf : gpd.GeoDataFrame
+        Polygons to calculate the Polsby–Popper test values for.
+
+    Returns
+    -------
+    gpd.GeoDataFrame
+        Polygons GeoDataFrame with a column `pp_test` containing the Polsby–Popper test values
+        for each polygon.
     """
     gdf["area"] = gdf["geometry"].area
     gdf["perimeter"] = gdf["geometry"].length
@@ -103,7 +114,28 @@ def pp_test_gdf(gdf):
     return gdf
 
 
-def split_large_polygons(input_gdf, pp_thresh: int = 0.005, method="nothing"):
+def split_large_polygons(
+        input_gdf: gpd.GeoDataFrame,
+        pp_thresh: int = 0.005,
+        method: str = "nothing") -> gpd.GeoDataFrame:
+    """
+    Function to split large polygons.
+
+    Parameters
+    ----------
+    input_gdf : gpd.GeoDataFrame
+        Set of polygons for which to split the large polygons.
+    pp_thresh : int, optional
+        Threshold for the Polsby–Popper test values of the polygons by which to
+        classify is a polygon is large or not, by default 0.005
+    method : str, optional
+        Method to use to split large polygons., by default "nothing"
+
+    Returns
+    -------
+    gpd.GeoDataFrame
+        Set of polygons with large polygons split.
+    """
 
     warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -192,7 +224,42 @@ def filter_waterbodies(
         urban_mask_fp: str = None,
         handle_large_polygons: str = "nothing",
         pp_test_threshold: float = 0.005,
-        ):
+        ) -> gpd.GeoDataFrame:
+    """
+    Filter a set of waterbody polygons.
+
+    Parameters
+    ----------
+    primary_threshold : float, optional
+        Threshold to use to determine the location of the waterbody polygons, by default 0.1
+    secondary_threshold : float, optional
+        Threshold to use to determine the extent / shape of the waterbodies polygons, by default 0.05
+    min_polygon_size : float, optional
+        Minimum area of a waterbody polygon to be included in the output polygons, by default 4500
+    max_polygon_size : float, optional
+        Maximum area of a waterbody polygon to be included in the output polygons, by default math.inf
+    filter_out_ocean_polygons : bool, optional
+        If True, filter out ocean waterbody polygons using the polygons from `land_sea_mask_fp`, by default False
+    land_sea_mask_fp : str, optional
+        Vector file path to the polygons to use to filter out ocean waterbody polygons, by default None
+    filter_out_major_rivers_polygons : bool, optional
+        If True filter out major rivers from the water body polygons, by default False
+    major_rivers_mask_fp : str, optional
+        Vector file path to the polygons to use to filter out major river waterbody polygons, by default None
+    filter_out_urban_polygons : bool, optional
+        If True filter out CBDs from the waterbody polygons, by default False
+    urban_mask_fp : str, optional
+        Vector file path to the polygons to use to filter out CBDs, by default None
+    handle_large_polygons : str, optional
+        Method to use to split large water body polygons, by default "nothing"
+    pp_test_threshold : float, optional
+        Polsby-Popper test value to use when splitting large polygons using the method specified in `handle_large_polygons`, by default 0.005
+
+    Returns
+    -------
+    gpd.GeoDataFrame
+        Filtered set of waterbody polygons.
+    """
 
     # Assert both polygons have the same crs
     assert primary_threshold_polygons.crs == secondary_threshold_polygons.crs
