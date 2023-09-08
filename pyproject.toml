@@ -39,6 +39,7 @@ dependencies = [
     's3urls',
     'python-dateutil',
     'deafrica-tools >= 2.0.3',
+    'boto3-stubs',
     # Code style
     'flake8',
     'black', 
