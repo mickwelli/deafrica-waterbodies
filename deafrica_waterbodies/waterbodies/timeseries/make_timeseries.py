@@ -6,6 +6,7 @@ import logging
 import datetime
 import dateutil
 import datacube
+import collections
 import numpy as np
 import pandas as pd
 import geopandas as gpd
@@ -324,16 +325,7 @@ def generate_timeseries_from_wofs_ls(
 
                 timesteps = list(wofls_da_masked.time.values)
 
-                poly_timeseries_data_dict = {
-                    "Observation Date": [],
-                    #"Total pixel count": [],
-                    "Wet pixel percentage": [],
-                    "Wet pixel count": [],
-                    "Dry pixel percentage": [],
-                    "Dry pixel count": [],
-                    "Invalid pixel percentage": [],
-                    "Invalid pixel count": [],
-                    }
+                poly_timeseries_data_dict = collections.defaultdict(list)
                 for timestep in timesteps:
                     wofl = wofls_da_masked.sel(time=timestep)
 
