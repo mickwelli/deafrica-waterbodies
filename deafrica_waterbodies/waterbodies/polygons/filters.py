@@ -219,7 +219,7 @@ def filter_waterbodies(
             try:
                 land_sea_mask = gpd.read_file(land_sea_mask_fp).to_crs(crs)
             except Exception as error:
-                _log.exception(error)
+                _log.exception(f"Could not read file {land_sea_mask_fp}")
                 raise error
             ocean_filtered_primary, _ = filter_geodataframe_by_intersection(area_filtered_primary, land_sea_mask, invert_mask=True)
             ocean_filtered_secondary, _ = filter_geodataframe_by_intersection(area_filtered_secondary, land_sea_mask, invert_mask=True)
@@ -240,7 +240,7 @@ def filter_waterbodies(
             try:
                 urban_mask = gpd.read_file(urban_mask_fp).to_crs(crs)
             except Exception as error:
-                _log.exception(error)
+                _log.exception(f"Could not read file {urban_mask_fp}")
                 raise error
             cbd_filtered_primary = filter_geodataframe_by_intersection(ocean_filtered_primary, urban_mask)
             cbd_filtered_secondary = ocean_filtered_secondary
@@ -281,8 +281,8 @@ def filter_waterbodies(
             try:
                 major_rivers = gpd.read_file(major_rivers_mask_fp).to_crs(crs)
             except Exception as error:
-                _log.exception(error)
-                raise
+                _log.exception(f"Could not read file {major_rivers_mask_fp}")
+                raise error
             major_rivers_filtered, _ = filter_geodataframe_by_intersection(merged_combined_polygons, major_rivers)
     else:
         info_msg = 'You have chosen not to filter out major rivers from the waterbodies. If you meant to use this option, please ' \

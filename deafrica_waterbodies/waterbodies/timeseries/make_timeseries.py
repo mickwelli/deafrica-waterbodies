@@ -206,7 +206,7 @@ def generate_timeseries_from_wofs_ls(
     try:
         polygons_gdf = gpd.read_file(waterbodies_vector_file)
     except Exception as error:
-        _log.exception(error)
+        _log.exception(f"Could not read file {waterbodies_vector_file}")
         raise error
 
     id_field = guess_id_field(polygons_gdf, use_id)
@@ -237,6 +237,7 @@ def generate_timeseries_from_wofs_ls(
     # Checks.
     if time_span == "all":
         if start_date or end_date:
+            _log.error("Time span set to all yet, start and end date specified.")
             raise ValueError("If a time span is set to 'all' do not pass a start date nor an end date.")
         else:
             start_date_str = "1984"

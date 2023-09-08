@@ -47,7 +47,7 @@ def get_product_regions(product: str):
         regions.set_index("region_code", inplace=True)
         return regions
     except Exception as error:
-        _log.error(error)
+        _log.exception(error)
         raise error
 
 
@@ -97,6 +97,7 @@ def check_wetness_thresholds(minimum_wet_thresholds):
     # Test whether the wetness threshold has been correctly set.
 
     if minimum_wet_thresholds[0] > minimum_wet_thresholds[-1]:
+        _log.error("Primary threshold value is less than the secondary threshold.")
         error_msg = 'We will be running a hybrid wetness threshold. ' \
             'Please ensure that the primary threshold has a higher value than the ' \
             'secondary threshold. \n'
@@ -227,8 +228,8 @@ def get_polygons_using_thresholds(
             primary_threshold_polygons_list.append(row_polygons[primary_threshold])
             secondary_threshold_polygons_list.append(row_polygons[secondary_threshold])
         except Exception as error:
-            _log.error(error)
-            _log.error(
+            _log.exception(error)
+            _log.exception(
                 f'\nTile {row_id} did not run. \n'
                 'This is probably because there are no waterbodies present in this tile.'
             )
@@ -293,6 +294,7 @@ def get_waterbodies(
     if aoi_gdf is None and continental_run:
         _log.info("Running for all the WOfS All Time Summary tiles covering Africa...")
     elif aoi_gdf is not None and continental_run:
+        _log.error("Area of interest specified, yet run type is continental.")
         raise ValueError("If setting an area of interest, set `continental_run=False`")
     elif aoi_gdf is not None and not continental_run:
         _log.info("Running for the WOfS All Time Summary tiles covering the defined area of interest...")
