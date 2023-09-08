@@ -1,3 +1,4 @@
+import click
 from click import Option, UsageError
 
 
