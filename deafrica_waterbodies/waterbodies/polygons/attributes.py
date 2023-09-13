@@ -1,18 +1,19 @@
+import geopandas as gpd
 import geohash as gh
 
 
-def assign_unique_ids(polygons):
+def assign_unique_ids(polygons: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
     Function to assign a unique ID to each waterbody polygon.
 
     Parameters
     ----------
-    polygons : geopandas.geodataframe.GeoDataFrame
+    polygons : gpd.GeoDataFrame
         GeoDataFrame containing the waterbody polygons.
 
     Returns
     -------
-    geopandas.geodataframe.GeoDataFrame
+    gpd.GeoDataFrame
         GeoDataFrame containing the waterbody polygons with additional columns
         "UID" and "WB_ID".
         The "UID" column contains a unique identifier
@@ -45,10 +46,10 @@ def assign_unique_ids(polygons):
 
 
 def get_timeseries_s3_object_url(
-        uid,
-        product_version,
-        output_bucket_name,
-        ):
+        uid: str,
+        product_version: str,
+        output_bucket_name: str,
+        ) -> str:
     """
     Get the timeseries s3 object URL given a unique identifier for a polygon.
 
@@ -83,15 +84,15 @@ def get_timeseries_s3_object_url(
 
 
 def add_timeseries_attribute(
-        polygons,
-        product_version,
-        output_bucket_name,):
+        polygons: gpd.GeoDataFrame,
+        product_version: str,
+        output_bucket_name: str) -> gpd.GeoDataFrame:
     """
     Function to assign the s3 object URL for the timeseries for each waterbody polygon.
 
     Parameters
     ----------
-    polygons : geopandas.geodataframe.GeoDataFrame
+    polygons : gpd.GeoDataFrame
         GeoDataFrame containing the waterbody polygons.
     product_version : str
         The product version for the DE Africa Waterbodies service.
@@ -100,7 +101,7 @@ def add_timeseries_attribute(
 
     Returns
     -------
-    geopandas.geodataframe.GeoDataFrame
+    gpd.GeoDataFrame
         GeoDataFrame containing the waterbody polygons with an additional
         column "timeseries".
         The "timeseries" column contains the s3 object URL for the timeseries for each
@@ -114,18 +115,18 @@ def add_timeseries_attribute(
     return polygons
 
 
-def add_area_and_perimeter_attributes(polygons):
+def add_area_and_perimeter_attributes(polygons: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
     Function to add the area and perimeter for each waterbody polygon.
 
     Parameters
     ----------
-    polygons : geopandas.geodataframe.GeoDataFrame
+    polygons : gpd.GeoDataFrame
         GeoDataFrame containing the waterbody polygons.
 
     Returns
     -------
-    geopandas.geodataframe.GeoDataFrame
+    gpd.GeoDataFrame
         GeoDataFrame with the crs "EPSG:6933" containing the waterbody polygons
         with additional columns "area_m2" and "perim_m".
         The "area_m2" column contains the area in meters squared of each

@@ -18,14 +18,14 @@ import geopandas as gpd
 from datacube.utils.geometry import Geometry
 from deafrica_tools.spatial import xr_vectorize
 
-from .attributes import assign_unique_ids
-from .filters import filter_geodataframe_by_intersection, filter_waterbodies
+from deafrica_waterbodies.waterbodies.polygons.attributes import assign_unique_ids
+from deafrica_waterbodies.waterbodies.polygons.filters import filter_geodataframe_by_intersection, filter_waterbodies
 
 
 _log = logging.getLogger(__name__)
 
 
-def get_product_regions(product: str):
+def get_product_regions(product: str) -> gpd.GeoDataFrame:
     """
     Returns a GeoDataFrame of all the tiles/regions of the DE Africa product.
 
@@ -36,7 +36,8 @@ def get_product_regions(product: str):
 
     Returns
     -------
-    geopandas.geodataframe.GeoDataFrame
+    gpd.GeoDataFrame
+        Regions of the DE Africa product.
 
     """
     base_url = "https://explorer.digitalearth.africa/api/regions/"
@@ -47,11 +48,13 @@ def get_product_regions(product: str):
         regions.set_index("region_code", inplace=True)
         return regions
     except Exception as error:
-        _log.error(error)
-        raise
+        _log.exception(error)
+        raise error
 
 
-def get_product_tiles(product="wofs_ls_summary_alltime", aoi_gdf=None):
+def get_product_tiles(
+        product: str = "wofs_ls_summary_alltime",
+        aoi_gdf: gpd.GeoDataFrame = None) -> gpd.GeoDataFrame:
     """
     Returns the regions/tiles of the DE Africa product that intersect with
     the area of interest GeoDataFrame.
@@ -60,12 +63,12 @@ def get_product_tiles(product="wofs_ls_summary_alltime", aoi_gdf=None):
     ----------
     product : str, optional
         Digital Earth Africa product, by default "wofs_ls_summary_alltime"
-    aoi_gdf : geopandas.geodataframe.GeoDataFrame, optional
+    aoi_gdf : gpd.GeoDataFrame, optional
         GeoDataFrame of the area of interest, by default None
 
     Returns
     -------
-    geopandas.geodataframe.GeoDataFrame
+    gpd.GeoDataFrame
         Regions/tiles of the DE Africa product that intersect with
         the area of interest GeoDataFrame.
     """
@@ -90,13 +93,27 @@ def get_product_tiles(product="wofs_ls_summary_alltime", aoi_gdf=None):
     return tiles
 
 
-def check_wetness_thresholds(minimum_wet_thresholds):
+def check_wetness_thresholds(minimum_wet_thresholds: list) -> str:
     """
     Function to validate the wetness thresholds.
+
+
+    Parameters
+    ----------
+    minimum_wet_thresholds : list
+        A list containing the primary and secondary thresholds, with the secondary
+        threshold listed first.
+
+    Returns
+    -------
+    str
+        Validation message
+
     """
     # Test whether the wetness threshold has been correctly set.
 
     if minimum_wet_thresholds[0] > minimum_wet_thresholds[-1]:
+        _log.error("Primary threshold value is less than the secondary threshold.")
         error_msg = 'We will be running a hybrid wetness threshold. ' \
             'Please ensure that the primary threshold has a higher value than the ' \
             'secondary threshold. \n'
@@ -111,14 +128,14 @@ def check_wetness_thresholds(minimum_wet_thresholds):
 
 
 def get_polygons_using_thresholds(
-        input_gdf: gpd.geodataframe.GeoDataFrame,
+        input_gdf: gpd.GeoDataFrame,
         dask_chunks: dict[str, int] = {"x": 3000, "y": 3000, "time": 1},
         resolution: tuple[int, int] = (-30, 30),
         output_crs: str = "EPSG:6933",
         min_valid_observations: int = 128,
         primary_threshold: float = 0.1,
         secondary_threshold: float = 0.05,
-                            ):
+        ) -> [gpd.GeoDataFrame, gpd.GeoDataFrame]:
     """
     Generate polygons by thresholding WOfS All Time Summary data.
 
@@ -141,8 +158,8 @@ def get_polygons_using_thresholds(
 
     Returns
     -------
-    primary_threshold_polygons, secondary_threshold_polygons
-        Polygons generated from thresholding WOfS All Time Summary data
+    [gpd.GeoDataFrame, gpd.GeoDataFrame]
+        A list containing GeoDataFrames of waterbody polygons generated from thresholding WOfS All Time Summary data
         using the primary and secondary thresholds.
 
     """
@@ -227,8 +244,8 @@ def get_polygons_using_thresholds(
             primary_threshold_polygons_list.append(row_polygons[primary_threshold])
             secondary_threshold_polygons_list.append(row_polygons[secondary_threshold])
         except Exception as error:
-            _log.error(error)
-            _log.error(
+            _log.exception(error)
+            _log.exception(
                 f'\nTile {row_id} did not run. \n'
                 'This is probably because there are no waterbodies present in this tile.'
             )
@@ -238,11 +255,25 @@ def get_polygons_using_thresholds(
     return primary_threshold_polygons, secondary_threshold_polygons
 
 
-def merge_polygons_at_tile_boundary(input_polygons, tiles):
+def merge_polygons_at_tile_boundary(
+        input_polygons: gpd.GeoDataFrame,
+        tiles: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
     Function to merge waterbody polygons located at tile boundaries.
-    """
 
+
+    Parameters
+    ----------
+    input_polygons : gpd.GeoDataFrame
+        The waterbody polygons.
+    tiles : gpd.GeoDataFrame
+        The tiles for the product used to generate the waterbody polygons.
+
+    Returns
+    -------
+    gpd.GeoDataFrame
+        Waterbody polygons with polygons located at tile boundaries merged.
+    """
     assert input_polygons.crs == tiles.crs
 
     # Add a 1 pixel (30 m) buffer to the tiles boundary.
@@ -270,7 +301,7 @@ def merge_polygons_at_tile_boundary(input_polygons, tiles):
 
 
 def get_waterbodies(
-        aoi_gdf: gpd.geodataframe.GeoDataFrame,
+        aoi_gdf: gpd.GeoDataFrame,
         continental_run: bool = False,
         dask_chunks: dict[str, int] = {"x": 3000, "y": 3000, "time": 1},
         resolution: tuple[int, int] = (-30, 30),
@@ -287,12 +318,64 @@ def get_waterbodies(
         filter_out_urban_polygons: bool = False,
         urban_mask_fp: str = None,
         handle_large_polygons: str = "nothing",
-        pp_test_threshold: float = 0.005,
-):
+        pp_test_threshold: float = 0.005,) -> gpd.GeoDataFrame:
+    """
+    Function to generate waterbody polygons for an area of interest.
+
+    Parameters
+    ----------
+    aoi_gdf : gpd.GeoDataFrame
+        GeoDataFrame of polygon(s) defining the area of interest.
+    continental_run : bool, optional
+        If True generate waterbody polygons for all of Africa (all the regions
+        for the WOfS All Time Summary product). Requires `aoi_gdf = None`.
+        If False, generate waterbody polygons for the area of interest defined
+        in `aoi_gdf`.
+        By default False
+    dask_chunks : dict[str, int], optional
+        Dask chunks to use when loading WOfS data, by default {"x": 3000, "y": 3000, "time": 1}
+    resolution : tuple[int, int], optional
+        Resolution to load the WOfS data in, by default (-30, 30)
+    output_crs : _type_, optional
+        CRS to load the WOfS data in, by default "EPSG:6933"
+    min_valid_observations : int, optional
+        Minimum number of observations for a pixel to be valid, by default 128
+    primary_threshold : float, optional
+        Threshold to use to determine the location of the waterbody polygons, by default 0.1
+    secondary_threshold : float, optional
+        Threshold to use to determine the extent / shape of the waterbodies polygons, by default 0.05
+    min_polygon_size : float, optional
+        Minimum area of a waterbody polygon to be included in the output polygons, by default 4500
+    max_polygon_size : float, optional
+        Maximum area of a waterbody polygon to be included in the output polygons, by default math.inf
+    filter_out_ocean_polygons : bool, optional
+        If True, filter out ocean waterbody polygons using the polygons from `land_sea_mask_fp`, by default False
+    land_sea_mask_fp : str, optional
+        Vector file path to the polygons to use to filter out ocean waterbody polygons, by default None
+    filter_out_major_rivers_polygons : bool, optional
+        If True filter out major rivers from the water body polygons, by default False
+    major_rivers_mask_fp : str, optional
+        Vector file path to the polygons to use to filter out major river waterbody polygons, by default None
+    filter_out_urban_polygons : bool, optional
+        If True filter out CBDs from the waterbody polygons, by default False
+    urban_mask_fp : str, optional
+        Vector file path to the polygons to use to filter out CBDs, by default None
+    handle_large_polygons : str, optional
+        Method to use to split large water body polygons, by default "nothing"
+    pp_test_threshold : float, optional
+        Polsby-Popper test value to use when splitting large polygons using the method specified in `handle_large_polygons`, by default 0.005
+
+    Returns
+    -------
+    gpd.GeoDataFrame
+        Waterbody polygons for the area of interest.
+
+    """
     # Check if this is a continental run.
     if aoi_gdf is None and continental_run:
         _log.info("Running for all the WOfS All Time Summary tiles covering Africa...")
     elif aoi_gdf is not None and continental_run:
+        _log.error("Area of interest specified, yet run type is continental.")
         raise ValueError("If setting an area of interest, set `continental_run=False`")
     elif aoi_gdf is not None and not continental_run:
         _log.info("Running for the WOfS All Time Summary tiles covering the defined area of interest...")

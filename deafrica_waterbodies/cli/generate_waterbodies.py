@@ -162,40 +162,42 @@ def generate_waterbodies(
 
     if run_type == "custom":
         if not vector_file_fp and not bbox:
+            _log.error("No vector file or bounding box for the area of interest specified.")
             error_msg = "If not running for all of Africa please specify an " \
                 "area of interest by EITHER passing a vector file path to --vector-file-fp "  \
                 "OR passing bounding box coordinates to --bbox"
-            _log.error(error_msg)
             raise ValueError(error_msg)
         elif vector_file_fp and bbox:
+            _log.error("Both vector file and bounding box for the area of interest specified.")
             error_msg = "Please specify EITHER a vector file path using --vector-file-fp OR  bounding box " \
                 "coordinates using --bbox ."
-            _log.error(error_msg)
             raise ValueError(error_msg)
         elif vector_file_fp and not bbox:
             # Read the vector file.
             try:
                 aoi_gdf = gpd.read_file(vector_file_fp)
+            except Exception as error:
+                _log.exception(f"Could not read the vector file {vector_file_fp}")
+                raise error
+            else:
                 aoi_gdf = aoi_gdf.to_crs(output_crs)
                 continental_run = False
-            except Exception as error:
-                _log.error(error)
-                raise
         elif bbox and not vector_file_fp:
             try:
                 # Convert bounding box to GeoDataFrame.
                 bbox_ = [float(i.strip()) for i in bbox.split(",")]
                 aoi_gdf = gpd.GeoDataFrame(geometry=[shapely.geometry.box(*bbox_)], crs=bbox_crs)
+            except Exception as error:
+                _log.exception(f"Error in defining the bounding box {bbox} using the crs {bbox_crs}.")
+                raise error
+            else:
                 aoi_gdf = aoi_gdf.to_crs(output_crs)
                 continental_run = False
-            except Exception as error:
-                _log.error(error)
-                raise
     elif run_type == "continental":
         if vector_file_fp or bbox:
+            _log.error("Vector file or bounding box defining an area of interest specified, yet run type is continental.")
             error_msg = "If running for all of Africa do not pass a vector file to " \
                 "--vector-file-fp or bounding box coordinates to --bbox"
-            _log.error(error_msg)
             raise ValueError(error_msg)
         else:
             aoi_gdf = None

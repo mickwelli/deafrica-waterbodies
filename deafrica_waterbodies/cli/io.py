@@ -6,60 +6,90 @@ import boto3
 import uuid
 import shutil
 import logging
+import geopandas as gpd
 from botocore.client import ClientError
+from mypy_boto3_s3 import S3Client
+
+from deafrica_waterbodies.waterbodies.timeseries.io import check_s3_bucket_exists
+
 
 _log = logging.getLogger(__name__)
 
 
-def test_access_to_bucket(bucket_name):
-
-    s3_client = boto3.client('s3')
-
-    try:
-        test = s3_client.head_bucket(Bucket=bucket_name)
-        if test:
-            _log.info(f"This user can write to the s3 bucket {bucket_name}")
-    except ClientError as error:
-        _log.error(f"This user can not write to the s3 bucket {bucket_name}")
-        _log.error(error)
-        raise
-    except Exception as error:
-        _log.error(error)
-        raise
-
-
 # From https://boto3.amazonaws.com/v1/documentation/api/latest/guide/s3-uploading-files.html
-def upload_file_to_s3(file_name, bucket_name, object_name=None):
-    """Upload a file to an S3 bucket
+def upload_file_to_s3(
+        file_name: str,
+        bucket_name: str,
+        object_name: str = None,
+        s3_client: S3Client = None) -> bool:
+    """
+    Upload a file to an S3 bucket.
 
-    :param file_name: File to upload
-    :param bucket_name: Bucket to upload to
-    :param object_name: S3 object name. If not specified then file_name is used
-    :return: True if file was uploaded, else False
+
+    Parameters
+    ----------
+    file_name : str
+        File path of the file to upload.
+    bucket_name : str
+        Name of the s3 bucket to upload to.
+    object_name : str, optional
+        S3 object name. If not specified then `file_name` is used, by default None
+    s3_client : S3Client
+        A low-level client representing Amazon Simple Storage Service (S3), by default None.
+
+    Returns
+    -------
+    bool
+        True if file was uploaded, else False
     """
 
     # If S3 object_name was not specified, use file_name
     if object_name is None:
         object_name = os.path.basename(file_name)
 
+    # Get the service client.
+    if s3_client is None:
+        s3_client = boto3.client("s3")
+
     # Upload the file
-    s3_client = boto3.client('s3')
     try:
-        response = s3_client.upload_file(file_name, bucket_name, object_name)
-    except ClientError as e:
-        _log.error(e)
+        response = s3_client.upload_file(file_name, bucket_name, object_name) # noqa F841
+    except ClientError as error:
+        _log.exception(error)
         return False
-    return True
+    else:
+        return True
 
 
 def write_waterbodies_to_file(
-        waterbodies_gdf,
-        product_version,
-        storage_location,
-        output_bucket_name,
-        output_local_folder,
-        output_file_name,
-        output_file_type):
+        waterbodies_gdf: gpd.GeoDataFrame,
+        product_version: str,
+        storage_location: str,
+        output_bucket_name: str,
+        output_local_folder: str,
+        output_file_name: str,
+        output_file_type: str):
+    """
+    Function to GeoDataFrame of waterbody polygons to an ESRI Shapefile or GeoJSON file.
+
+    Parameters
+    ----------
+    waterbodies_gdf : gpd.GeoDataFrame
+        The waterbody polygons.
+    product_version : str
+        The DE Africa Waterbodies product version number.
+    storage_location : str
+        Type of storage location. Either "local" or "s3".
+    output_bucket_name : str
+        The name of the S3 Bucket to write the polygons to.
+    output_local_folder : str
+        The file path of the local folder to write the polygons to.
+    output_file_name : str
+        The name of the file to write the waterbody polygons to.
+    output_file_type : str
+        File type to write the polygons to. Either "GeoJSON" or "ESRI Shapefile"
+
+    """
 
     # Validate output file type.
     valid_output_file_type = ['GeoJSON', 'Shapefile']
@@ -69,10 +99,11 @@ def write_waterbodies_to_file(
         elif output_file_type == "Shapefile":
             output_file_extension = ".shp"
         else:
-            raise ValueError(f"{output_file_type} is not implemented. Please select from {valid_output_file_type}.")
+            _log.error(f"{output_file_type} is not implemented.")
+            raise ValueError(f"Invalid output file type. Select a valid output from {valid_output_file_type}.")
     except Exception as error:
-        _log.error(error)
-        raise
+        _log.exception(error)
+        raise error
 
     object_prefix = f'{product_version.replace(".", "-")}/shapefile/'
     object_name = f"{output_file_name}{output_file_extension}"
@@ -95,11 +126,13 @@ def write_waterbodies_to_file(
 
         except Exception as error:
             _log.error(error)
-            raise
+            raise error
 
     elif storage_location == "s3":
+        # Get the service client.
+        s3_client = boto3.client("s3")
 
-        test_access_to_bucket(bucket_name=output_bucket_name)
+        check_s3_bucket_exists(output_bucket_name, s3_client)
 
         s3_uri = f"s3://{output_bucket_name}/{object_prefix}{object_name}"
 
@@ -126,7 +159,8 @@ def write_waterbodies_to_file(
                     local_temp_file_fp = os.path.join(local_temp_dir, local_temp_file)
                     upload_file_to_s3(file_name=local_temp_file_fp,
                                       bucket_name=output_bucket_name,
-                                      object_name=f"{object_prefix}{local_temp_file}")
+                                      object_name=f"{object_prefix}{local_temp_file}",
+                                      s3_client=s3_client)
 
                 # Delete temporary folder.
                 shutil.rmtree(local_temp_dir)
@@ -135,4 +169,4 @@ def write_waterbodies_to_file(
 
         except Exception as error:
             _log.error(error)
-            raise
+            raise error
