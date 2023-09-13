@@ -9,7 +9,7 @@ import geopandas as gpd
 from moto import mock_sqs
 import pytest
 
-from dea_waterbodies.make_time_series import main, RE_IDS_STRING, RE_ID
+from deafrica_waterbodies.waterbodies.timeseries.make_time_series import main, RE_IDS_STRING, RE_ID
 
 
 # Test directory.

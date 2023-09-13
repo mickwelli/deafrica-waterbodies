@@ -1,3 +1,64 @@
+[build-system]
+requires = ["read_version ~= 0.3.0","setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "deafrica-waterbodies"
+description = "Digital Earth Africa Waterbodies"
+authors = [{name = "Digital Earth Africa", email = "systems@digitalearthafrica.org"}]
+maintainers = [{name = "Digital Earth Africa", email = "systems@digitalearthafrica.org"}]
+readme = {file = "README.rst", content-type = "text/x-rst"}
+# If you change the License, remember to change the Trove Classifier!
+license = {file = "LICENSE"}
+classifiers=[
+    # Trove classifiers
+    # Full list: https://pypi.python.org/pypi?%3Aaction=list_classifiers
+    'License :: OSI Approved :: Apache Software License',
+    'Programming Language :: Python',
+    'Programming Language :: Python :: 3',
+    'Programming Language :: Python :: 3.9',
+    'Programming Language :: Python :: 3.10',
+    'Programming Language :: Python :: 3.11',
+    'Intended Audience :: Science/Research',
+    'Topic :: Scientific/Engineering :: GIS',
+    'Topic :: Scientific/Engineering :: Hydrology',
+]
+requires-python = ">=3.9.0"
+dependencies = [
+    'numpy',
+    'pandas',
+    'geopandas',
+    'python-geohash',
+    'datacube',
+    'shapely',
+    'click',
+    'fsspec',
+    'boto3',
+    'botocore',
+    'rasterio',
+    'deafrica-tools >= 2.0.3',
+    # Code style
+    'flake8',
+    'black', 
+    # Testing
+    'pytest',
+]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/digitalearthafrica/deafrica-waterbodies"
+Repository = "https://github.com/digitalearthafrica/deafrica-waterbodies"
+Documentation = "https://github.com/digitalearthafrica/deafrica-waterbodies#readme"
+
+[project.scripts]
+deafrica-waterbodies="deafrica_waterbodies.cli.main:main"
+
+[tool.setuptools]
+packages = ["deafrica_waterbodies"]
+
+[tool.setuptools.dynamic]
+version = {attr = "deafrica_waterbodies.__version__"}
+
 [tool.pytest.ini_options]
 log_cli = true
 log_cli_level = "INFO"

@@ -27,7 +27,6 @@ def get_queue(queue_name: str):
     return queue
 
 
-
 def verify_name(name):
     if not name.startswith('waterbodies_'):
         raise click.ClickException(
