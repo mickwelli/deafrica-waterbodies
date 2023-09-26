@@ -223,8 +223,7 @@ def get_polygons_using_thresholds(
 
                 polygons = xr_vectorize(wofs_alltime_summary_valid,
                                         mask=polygons_mask,
-                                        crs=wofs_alltime_summary.geobox.crs,
-                                        transform=wofs_alltime_summary.geobox.transform)
+                                        crs=wofs_alltime_summary.geobox.crs,)
 
                 # Combine any overlapping polygons.
                 merged_polygon_geoms = shapely.ops.unary_union(polygons['geometry'])
