@@ -11,15 +11,16 @@ import logging
 import math
 import multiprocessing
 from functools import partial
+
 import datacube
 import datacube.model
 import geopandas as gpd
 import numpy as np
 import pandas as pd
 import shapely
+import tqdm
 from datacube.utils.geometry import Geometry
 from deafrica_tools.spatial import xr_vectorize
-import tqdm
 
 from deafrica_waterbodies.waterbodies.polygons.attributes import assign_unique_ids
 from deafrica_waterbodies.waterbodies.polygons.filters import (
@@ -28,65 +29,6 @@ from deafrica_waterbodies.waterbodies.polygons.filters import (
 )
 
 _log = logging.getLogger(__name__)
-
-
-def check_ds_intersects_polygons(polygons_gdf: gpd.GeoDataFrame, ds: datacube.model.Dataset) -> datacube.model.Dataset | None:
-    """
-    Check if the extent of a dataset intersects with a set of polygons.
-
-    Parameters
-    ----------
-    polygons_gdf : gpd.GeoDataFrame
-    ds : datacube.model.Dataset
-
-    Returns
-    -------
-    datacube.model.Dataset | None
-        Retruns
-    """
-    if polygons_gdf is not None:
-        # Get the extent of the dataset.
-        ds_extent = ds.extent
-        # Reproject the extent of the dataset to match the polygons.
-        ds_extent = ds_extent.to_crs(polygons_gdf.crs)
-        # Get the shapely geometry of the reprojected extent of the dataset.
-        ds_extent_geom = ds_extent.geom
-        # Check if the dataset's extent intersects with any of the polygons.
-        check_intersection = polygons_gdf.geometry.intersects(ds_extent_geom).any()
-        if check_intersection:
-            return ds
-        else:
-            return None
-    else:
-        return ds
-
-
-def filter_datasets(dss: list[datacube.model.Dataset], polygons_gdf: gpd.GeoDataFrame, num_workers: int = 8) -> list[datacube.model.Dataset]:
-    """
-    Filter out datasets that do not intersect with a set of polygons, using a
-    multi-process approach to run the `check_ds_intersects_polygons` function.
-
-    Parameters
-    ----------
-    dss : list[datacube.model.Dataset]
-        A list of Datasets to filter.
-    polygons_gdf : gpd.GeoDataFrame
-        A set of polygons in a GeoDataFrame
-    num_workers : int, optional
-        Number of worker processes, by default 8
-
-    Returns
-    -------
-    list[datacube.model.Dataset]
-        A list of the filtered datasets.
-    """
-    with multiprocessing.Pool(processes=num_workers) as pool:
-        filtered_datasets_ = list(tqdm.tqdm(pool.imap(partial(check_ds_intersects_polygons, polygons_gdf), dss)))
-
-    # Remove empty strings.
-    filtered_datasets = [item for item in filtered_datasets_ if item]
-
-    return filtered_datasets
 
 
 def check_wetness_thresholds(minimum_wet_thresholds: list) -> str:
@@ -127,25 +69,170 @@ def check_wetness_thresholds(minimum_wet_thresholds: list) -> str:
         return print_msg
 
 
+def check_ds_intersects_polygons(
+    polygons_gdf: gpd.GeoDataFrame | None, ds: datacube.model.Dataset
+) -> str:
+    """
+    Check if the extent of a dataset intersects with a set of polygons.
+
+    Parameters
+    ----------
+    polygons_gdf : gpd.GeoDataFrame | None
+    ds : datacube.model.Dataset
+
+    Returns
+    -------
+    str | None
+        Dataset id if the dataset's extent intersects with the polygons.
+    """
+    if polygons_gdf is not None:
+        # Get the extent of the dataset.
+        ds_extent = ds.extent
+        # Reproject the extent of the dataset to match the polygons.
+        ds_extent = ds_extent.to_crs(polygons_gdf.crs)
+        # Get the shapely geometry of the reprojected extent of the dataset.
+        ds_extent_geom = ds_extent.geom
+        # Check if the dataset's extent intersects with any of the polygons.
+        check_intersection = polygons_gdf.geometry.intersects(ds_extent_geom).any()
+        if check_intersection:
+            return str(ds.id)
+        else:
+            return ""
+    else:
+        return str(ds.id)
+
+
+def filter_datasets(
+    dss: list[datacube.model.Dataset], polygons_gdf: gpd.GeoDataFrame | None, num_workers: int = 8
+) -> list[str]:
+    """
+    Filter out datasets that do not intersect with a set of polygons, using a
+    multi-process approach to run the `check_ds_intersects_polygons` function.
+
+    Parameters
+    ----------
+    dss : list[datacube.model.Dataset]
+        A list of Datasets to filter.
+    polygons_gdf : gpd.GeoDataFrame | None
+        A set of polygons in a GeoDataFrame
+    num_workers : int, optional
+        Number of worker processes to use during multi-processing, by default 8
+
+    Returns
+    -------
+    list[str]
+        A list of the filtered datasets ids.
+    """
+    with multiprocessing.Pool(processes=num_workers) as pool:
+        filtered_datasets_ids_ = list(
+            tqdm.tqdm(pool.imap(partial(check_ds_intersects_polygons, polygons_gdf), dss))
+        )
+
+    # Remove empty strings.
+    filtered_datasets_ids = [item for item in filtered_datasets_ids_ if item]
+
+    return filtered_datasets_ids
+
+
+def get_datasets_ids(
+    aoi_gdf: gpd.GeoDataFrame | None, dc: datacube.Datacube | None = None, num_workers: int = 8
+):
+    """
+    Get the dataset ids of the WOfS All Time Summary datasets whose extents intersect
+    with any of the area of interest polygons.
+
+    Parameters
+    ----------
+    aoi_gdf : gpd.GeoDataFrame | None
+        Area of interest
+    dc : datacube.Datacube | None, optional
+        Datacube connection, by default None
+    num_workers : int, optional
+        Number of worker processes to use when filtering datasets, by default 8
+    Returns
+    -------
+    str
+        Dataset ids of the WOfS All Time Summary datasets whose extents intersect
+        with any of the area of interest polygons.
+    """
+    # Connect to the datacube.
+    if dc is None:
+        dc = datacube.Datacube(app="WaterbodiesPolygons")
+
+    # Find all datasets available for the WOfS All Time summary product.
+    dss = dc.index.datasets.search(product=["wofs_ls_summary_alltime"])
+    dss = list(dss)
+
+    # Filter the datasets to the area of interest.
+    filtered_datasets_ids = filter_datasets(dss, aoi_gdf, num_workers)
+
+    return filtered_datasets_ids
+
+
+def merge_polygons_at_dataset_boundary(
+    input_polygons: gpd.GeoDataFrame, buffered_30m_ds_extents: gpd.GeoDataFrame
+) -> gpd.GeoDataFrame:
+    """
+    Function to merge waterbody polygons located at scene/dataset boundaries.
+
+    Parameters
+    ----------
+    input_polygons : gpd.GeoDataFrame
+        The waterbody polygons.
+    buffered_30m_ds_extents : gpd.GeoDataFrame
+        The buffered (by 30m) extents of the datasets used to generate the water body polygons.
+
+    Returns
+    -------
+    gpd.GeoDataFrame
+        Waterbody polygons with polygons located at dataset boundaries merged.
+    """
+    assert input_polygons.crs == buffered_30m_ds_extents.crs
+
+    # Get the polygons at the dataset boundaries.
+    boundary_polygons, _, not_boundary_polygons = filter_geodataframe_by_intersection(
+        input_polygons, buffered_30m_ds_extents, invert_mask=False, return_inverse=True
+    )
+
+    # Now combine overlapping polygons in boundary_polygons.
+    merged_boundary_polygons_geoms = shapely.ops.unary_union(boundary_polygons["geometry"])
+
+    # `Explode` the multipolygon back out into individual polygons.
+    merged_boundary_polygons = gpd.GeoDataFrame(
+        crs=input_polygons.crs, geometry=[merged_boundary_polygons_geoms]
+    )
+    merged_boundary_polygons = merged_boundary_polygons.explode(index_parts=True).reset_index(
+        drop=True
+    )
+
+    # Then combine our merged_boundary_polygons with the not_boundary_polygons.
+    all_polygons = gpd.GeoDataFrame(
+        pd.concat([not_boundary_polygons, merged_boundary_polygons], ignore_index=True, sort=True)
+    ).set_geometry("geometry")
+
+    return all_polygons
+
+
 def get_polygons_using_thresholds(
-    aoi_gdf: gpd.GeoDataFrame,
+    dataset_ids: list[str],
     dask_chunks: dict[str, int] = {"x": 3200, "y": 3200, "time": 1},
     resolution: tuple[int, int] = (-30, 30),
     output_crs: str = "EPSG:6933",
     min_valid_observations: int = 128,
     primary_threshold: float = 0.1,
     secondary_threshold: float = 0.05,
-    num_workers: int = 8,
+    dc: datacube.Datacube | None = None,
 ) -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
     """
     Generate polygons by thresholding WOfS All Time Summary data.
 
     Parameters
     ----------
-    aoi_gdf : gpd.geodataframe.GeoDataFrame
-        Area of interest GeoDataFrame
+    dataset_ids : list[str]
+        A list of dataset ids for the WOfs All Time summary datasets for which to
+        generate waterbody polygons for.
     dask_chunks : dict, optional
-        dask_chunks to use to load WOfS data, by default {"x": 3000, "y": 3000, "time": 1}
+        dask_chunks to use to load WOfS data, by default {"x": 3200, "y": 3200, "time": 1}
     resolution : tuple[int, int], optional
         Resolution to use to load WOfS data, by default (-30, 30)
     output_crs : str, optional
@@ -156,8 +243,9 @@ def get_polygons_using_thresholds(
         Threshold to use to determine the location of the waterbody polygons, by default 0.1
     secondary_threshold : float, optional
         Threshold to use to determine the extent / shape of the waterbodies polygons, by default 0.05
-    num_workers : int, optional
-        Number of worker processes, by default 8
+    dc : datacube.Datacube | None, optional
+        Datacube connection, by default None
+
     Returns
     -------
     tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]
@@ -176,33 +264,32 @@ def get_polygons_using_thresholds(
         output_crs=output_crs,
     )
 
-    # Reproject the input_gdf.
-    aoi_gdf = aoi_gdf.to_crs(output_crs)
-
     # Connect to the datacube.
-    dc = datacube.Datacube(app="WaterbodiesPolygons")
+    if dc is None:
+        dc = datacube.Datacube(app="WaterbodiesPolygons")
 
-    # Find all datasets available for the WOfS All Time summary product.
-    dss = dc.index.datasets.search(product=["wofs_ls_summary_alltime"])
-    dss = list(dss)
+    # Get the datasets.
+    datasets = [dc.index.datasets.get(dataset_id) for dataset_id in dataset_ids]
 
-    # Filter the datasets to the area of interest.
-    filtered_datasets = filter_datasets(dss, aoi_gdf)
+    # Get the dataset extents.
+    datasets_extents = gpd.GeoDataFrame(
+        geometry=[ds.extent.to_crs(output_crs).geom for ds in datasets], crs=output_crs
+    )
 
+    # Buffer the dataset extents by 30m (1 pixel)
+    buffered_30m_datasets_extents = datasets_extents.boundary.buffer(
+        30, cap_style="flat", join_style="mitre"
+    )
 
+    # Generate the waterbody polygons.
     primary_threshold_polygons_list = []
     secondary_threshold_polygons_list = []
-    for row in input_gdf.itertuples():
-        row_id = row.Index
-        _log.info(f"Generating polygons for tile: {row_id}")
-        row_geom = Geometry(geom=row.geometry, crs=input_gdf.crs)
-
-        # Update the datacube query with the row geometry.
-        query.update(geopolygon=row_geom)
-
+    for dataset in datasets:
         try:
-            # Load the WOfS All-Time Summary of clear and wet observations.
-            wofs_alltime_summary = dc.load("wofs_ls_summary_alltime", **query).squeeze()
+            _log.info(f"Generating polygons for dataset {str(dataset.id)}")
+
+            # Load the WOfS All-Time Summary dataset.
+            wofs_alltime_summary = dc.load(datasets=[dataset], **query).squeeze()
 
             # Set the no-data values to nan.
             # Masking here is done using the frequency measurement because for multiple
@@ -262,67 +349,29 @@ def get_polygons_using_thresholds(
         except Exception as error:
             _log.exception(error)
             _log.exception(
-                f"\nTile {row_id} did not run. \n"
-                "This is probably because there are no waterbodies present in this tile."
+                f"\nDataset {str(dataset.id)} did not run. \n"
+                "This is probably because there are no waterbodies present in this scene."
             )
+
     primary_threshold_polygons = pd.concat(primary_threshold_polygons_list)
     secondary_threshold_polygons = pd.concat(secondary_threshold_polygons_list)
 
+    # Merge water body polygons at dataset/scene boundaries.
+    _log.info("Merging polygons at tile boundaries...")
+    primary_threshold_polygons = merge_polygons_at_dataset_boundary(
+        primary_threshold_polygons, buffered_30m_datasets_extents
+    )
+    secondary_threshold_polygons = merge_polygons_at_dataset_boundary(
+        secondary_threshold_polygons, buffered_30m_datasets_extents
+    )
+
     return primary_threshold_polygons, secondary_threshold_polygons
-
-
-def merge_polygons_at_tile_boundary(
-    input_polygons: gpd.GeoDataFrame, tiles: gpd.GeoDataFrame
-) -> gpd.GeoDataFrame:
-    """
-    Function to merge waterbody polygons located at tile boundaries.
-
-
-    Parameters
-    ----------
-    input_polygons : gpd.GeoDataFrame
-        The waterbody polygons.
-    tiles : gpd.GeoDataFrame
-        The tiles for the product used to generate the waterbody polygons.
-
-    Returns
-    -------
-    gpd.GeoDataFrame
-        Waterbody polygons with polygons located at tile boundaries merged.
-    """
-    assert input_polygons.crs == tiles.crs
-
-    # Add a 1 pixel (30 m) buffer to the tiles boundary.
-    buffered_30m_tiles = tiles.boundary.buffer(30, cap_style="flat", join_style="mitre")
-    buffered_30m_tiles_gdf = gpd.GeoDataFrame(geometry=buffered_30m_tiles, crs=tiles.crs)
-
-    # Get the polygons at the tile boundaries.
-    boundary_polygons, _, not_boundary_polygons = filter_geodataframe_by_intersection(
-        input_polygons, buffered_30m_tiles_gdf, invert_mask=False, return_inverse=True
-    )
-
-    # Now combine overlapping polygons in boundary_polygons.
-    merged_boundary_polygons_geoms = shapely.ops.unary_union(boundary_polygons["geometry"])
-
-    # `Explode` the multipolygon back out into individual polygons.
-    merged_boundary_polygons = gpd.GeoDataFrame(
-        crs=input_polygons.crs, geometry=[merged_boundary_polygons_geoms]
-    )
-    merged_boundary_polygons = merged_boundary_polygons.explode(index_parts=True).reset_index(
-        drop=True
-    )
-
-    # Then combine our merged_boundary_polygons with the not_boundary_polygons.
-    all_polygons = gpd.GeoDataFrame(
-        pd.concat([not_boundary_polygons, merged_boundary_polygons], ignore_index=True, sort=True)
-    ).set_geometry("geometry")
-
-    return all_polygons
 
 
 def get_waterbodies(
     aoi_gdf: gpd.GeoDataFrame,
     continental_run: bool = False,
+    num_workers: int = 8,
     dask_chunks: dict[str, int] = {"x": 3200, "y": 3200, "time": 1},
     resolution: tuple[int, int] = (-30, 30),
     output_crs: str = "EPSG:6933",
@@ -353,6 +402,8 @@ def get_waterbodies(
         If False, generate waterbody polygons for the area of interest defined
         in `aoi_gdf`.
         By default False
+    num_workers : int, optional
+        Number of worker processes to use when filtering datasets, by default 8
     dask_chunks : dict[str, int], optional
         Dask chunks to use when loading WOfS data, by default {"x": 3000, "y": 3000, "time": 1}
     resolution : tuple[int, int], optional
@@ -402,33 +453,30 @@ def get_waterbodies(
         _log.info(
             "Running for the WOfS All Time Summary tiles covering the defined area of interest..."
         )
+    # Connect to the datacube.
+    dc = datacube.Datacube(app="WaterbodiesPolygons")
 
-    # Get the tiles covering the area of interest.
-    _log.info("Loading tiles..")
-    aoi_gdf = aoi_gdf.to_crs(output_crs)
-    tiles = get_product_tiles(product="wofs_ls_summary_alltime", aoi_gdf=aoi_gdf)
+    # Get the WOfS All time Summary dataset ids for the area of interest.
+    _log.info("Loading dataset ids..")
+    dataset_ids = get_datasets_ids(aoi_gdf=aoi_gdf, dc=dc, num_workers=num_workers)
+    _log.info(f"Found {len(dataset_ids)} datasets.")
 
     _log.info("Generating the first temporary set of waterbody polygons.")
     temp_primary, temp_secondary = get_polygons_using_thresholds(
-        input_gdf=tiles,
+        dataset_ids=dataset_ids,
         dask_chunks=dask_chunks,
         resolution=resolution,
         output_crs=output_crs,
         min_valid_observations=min_valid_observations,
         primary_threshold=primary_threshold,
         secondary_threshold=secondary_threshold,
-    )
-
-    _log.info("Merging polygons at tile boundaries...")
-    merged_temp_primary = merge_polygons_at_tile_boundary(input_polygons=temp_primary, tiles=tiles)
-    merged_temp_secondary = merge_polygons_at_tile_boundary(
-        input_polygons=temp_secondary, tiles=tiles
+        dc=dc,
     )
 
     _log.info("Filtering waterbodies...")
     filtered_polygons = filter_waterbodies(
-        primary_threshold_polygons=merged_temp_primary,
-        secondary_threshold_polygons=merged_temp_secondary,
+        primary_threshold_polygons=temp_primary,
+        secondary_threshold_polygons=temp_secondary,
         min_polygon_size=min_polygon_size,
         max_polygon_size=max_polygon_size,
         filter_out_ocean_polygons=filter_out_ocean_polygons,
