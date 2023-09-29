@@ -194,7 +194,7 @@ def generate_waterbodies(
     logging_setup(verbose)
     _log = logging.getLogger(__name__)
 
-    dask_chunks = {"x": 3000, "y": 3000, "time": 1}
+    dask_chunks = {"x": 3200, "y": 3200, "time": 1}
     resolution = (-30, 30)
     output_crs = "EPSG:6933"
     min_valid_observations = 128
