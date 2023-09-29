@@ -39,7 +39,7 @@ dependencies = [
     'python-dateutil',
     'python-geohash',
     'shapely',
-    'tqdm'
+    'tqdm',
     # Code style
     'black',
     'isort',
