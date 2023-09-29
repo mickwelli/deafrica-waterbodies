@@ -3,7 +3,7 @@ import datetime
 import logging
 import os
 import urllib
-
+from pathlib import Path
 import boto3
 import datacube
 import dateutil
@@ -19,21 +19,19 @@ from tqdm.auto import tqdm
 from deafrica_waterbodies.waterbodies.timeseries.id_field import guess_id_field
 from deafrica_waterbodies.waterbodies.timeseries.io import (
     check_if_s3_uri,
-    check_local_dir_exists,
-    check_local_file_exists,
-    check_s3_object_exists,
+    check_dir_exists,
+    check_file_exists,
 )
 
 _log = logging.getLogger(__name__)
 
 
 def get_polygon_ids_for_missing_timeseries(
-    polygons_gdf: gpd.GeoDataFrame, output_directory: str, s3_client: S3Client = None
-) -> [str]:
+    polygons_gdf: gpd.GeoDataFrame, output_directory: str | Path, s3_client: S3Client | None = None
+) -> list[str]:
     """
     Get IDs for polygons whose timeseries .csv file does not exist
     in the output directory.
-
 
     Parameters
     ----------
@@ -47,10 +45,12 @@ def get_polygon_ids_for_missing_timeseries(
 
     Returns
     -------
-    [str]
+    list[str]
         List of polygon IDs whose timeseries file was not found in the output
         directory.
     """
+    # Support pathlib paths.
+    output_directory = str(output_directory)
 
     # Get the service client.
     if s3_client is None:
@@ -59,42 +59,22 @@ def get_polygon_ids_for_missing_timeseries(
     polygon_ids = polygons_gdf.index.to_list()
 
     # Check if output_dir exists.
-    is_s3_uri = check_if_s3_uri(output_directory)
+    if not check_dir_exists(output_directory):
+        _log.error(f"Could not find directory {output_directory}!")
+        raise FileNotFoundError(f"Could not find directory {output_directory}!")
+    else:
+        polygons_wthout_timeseries = []
+        for polygon_id in polygon_ids:
+            timeseries_fp = os.path.join(output_directory, polygon_id[:4], f"{polygon_id}.csv")
+            # Check if file exists.
+            if not check_file_exists(timeseries_fp):
+                polygons_wthout_timeseries.append(polygon_id)
 
-    try:
-        if is_s3_uri:
-            check_s3_object_exists(output_directory, error_if_exists=False, s3_client=s3_client)
-        else:
-            check_local_dir_exists(output_directory, error_if_exists=False)
-    except FileNotFoundError as error:
-        _log.exception(f"Could not find directory file {output_directory}!")
-        raise error
-    except PermissionError as error:
-        _log.exception(f"You do not have sufficient permissions to access {output_directory}!")
-        raise error
-
-    polygons_wthout_timeseries = []
-    for polygon_id in polygon_ids:
-        timeseries_fp = os.path.join(output_directory, polygon_id[:4], f"{polygon_id}.csv")
-
-        # Check if file exists.
-        is_s3_uri = check_if_s3_uri(timeseries_fp)
-
-        try:
-            if is_s3_uri:
-                check_s3_object_exists(timeseries_fp, error_if_exists=False, s3_client=s3_client)
-            else:
-                check_local_file_exists(timeseries_fp, error_if_exists=False)
-        except FileNotFoundError:
-            polygons_wthout_timeseries.append(polygon_id)
-        except PermissionError:
-            _log.exception(f"You do not have sufficient permissions to access {timeseries_fp}!")
-
-    return polygons_wthout_timeseries
+        return polygons_wthout_timeseries
 
 
 def get_last_observation_date_from_csv(
-    csv_file_path: str, s3_client: S3Client = None
+    csv_file_path: str | Path, s3_client: S3Client | None = None
 ) -> pd.Timestamp:
     """
     Get the date of the last observation from a water body polygon's
@@ -102,9 +82,9 @@ def get_last_observation_date_from_csv(
 
     Parameters
     ----------
-    csv_file_path : str
+    csv_file_path : str | Path
         S3 URI or File URI of the timeseries csv file for a waterbody polygon.
-    s3_client : S3Client
+    s3_client : S3Client | None
         A low-level client representing Amazon Simple Storage Service (S3), by default None.
 
     Returns
@@ -118,41 +98,34 @@ def get_last_observation_date_from_csv(
         s3_client = boto3.client("s3")
 
     # Check if the file exists.
-    is_s3_uri = check_if_s3_uri(csv_file_path)
+    if check_file_exists(csv_file_path):
+        # Read file using pandas.
+        # Should work for s3 files also.
+        timeseries_df = pd.read_csv(csv_file_path)
 
-    try:
-        if is_s3_uri:
-            check_s3_object_exists(csv_file_path, error_if_exists=False, s3_client=s3_client)
-        else:
-            check_local_file_exists(csv_file_path, error_if_exists=False)
-    except Exception as error:
-        _log.exception(error)
-        raise error
+        # Convert to datetime.
+        timeseries_df["Observation Date"] = pd.to_datetime(timeseries_df["Observation Date"])
 
-    # Read file using pandas.
-    # Should work for s3 files also.
-    timeseries_df = pd.read_csv(csv_file_path)
+        # Sort in acending order
+        timeseries_df.sort_values(by="Observation Date", ascending=True, inplace=True)
 
-    # Convert to datetime.
-    timeseries_df["Observation Date"] = pd.to_datetime(timeseries_df["Observation Date"])
+        last_date = timeseries_df["Observation Date"].to_list()[-1]
 
-    # Sort in acending order
-    timeseries_df.sort_values(by="Observation Date", ascending=True, inplace=True)
-
-    last_date = timeseries_df["Observation Date"].to_list()[-1]
-
-    return last_date
+        return last_date
+    else:
+        _log.error(f"File {csv_file_path} does not exist!")
+        raise FileNotFoundError(f"File {csv_file_path} does not exist!")
 
 
 def generate_timeseries_from_wofs_ls(
-    waterbodies_vector_file: str,
-    output_directory: str,
+    waterbodies_vector_file: str | Path,
+    output_directory: str | Path,
     use_id: str,
     missing_only: bool = False,
     time_span: str = "all",
-    start_date: datetime.datetime = None,
-    end_date: datetime.datetime = None,
-    subset_polygons_ids: [str] = [],
+    start_date: datetime.datetime | None = None,
+    end_date: datetime.datetime | None = None,
+    subset_polygons_ids: list[str] = [],
     include_uncertainity: bool = True,
 ):
     """
@@ -163,10 +136,10 @@ def generate_timeseries_from_wofs_ls(
 
     Parameters
     ----------
-    waterbodies_vector_file : str
+    waterbodies_vector_file : str | Path
         Path to the water body polygons vector file to generate the time series
         for.
-    output_directory : str
+    output_directory : str | Path
         File URI or S3 URI of the directory to write the timeseries csv files to.
     use_id : str
         Name of the column/field in the waterbody polygon vector file containing
@@ -178,13 +151,13 @@ def generate_timeseries_from_wofs_ls(
     time_span : str, optional
         Time span to generate the timeseries for. Valid options are `"all"`,
         `"custom"`, or `"append"`,  by default "all"
-    start_date : datetime.datetime, optional
+    start_date : datetime.datetime | None, optional
         Start date for the time range to generate the timeseries for, if `time_span`
         is set to `"custom"`, by default None
-    end_date : datetime.datetime, optional
+    end_date : datetime.datetime | None, optional
         End date for the time range to generate the timeseries for, if `time_span`
         is set to `"custom"`, by default None
-    subset_polygons_ids : [str], optional
+    subset_polygons_ids : list[str], optional
         A list of ids of the waterbodies to generate the timeseries for from
         the waterbodies in `waterbodies_vector_file`.
     include_uncertainity: bool, optional
@@ -206,11 +179,10 @@ def generate_timeseries_from_wofs_ls(
     except Exception as error:
         _log.exception(f"Could not read file {waterbodies_vector_file}")
         raise error
-
-    id_field = guess_id_field(polygons_gdf, use_id)
-    _log.info(f"Guessed ID field: {id_field}")
-
-    polygons_gdf.set_index(id_field, inplace=True)
+    else:
+        id_field = guess_id_field(polygons_gdf, use_id)
+        _log.info(f"Guessed ID field: {id_field}")
+        polygons_gdf.set_index(id_field, inplace=True)
 
     polygons_gdf = polygons_gdf.to_crs(output_crs)
 
