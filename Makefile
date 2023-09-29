@@ -35,7 +35,7 @@ index: ## 4. Index the test data.
 	cat index_tiles.sh | docker compose exec -T index bash
 
 install-waterbodies: ## 5. Install deafrica-waterbodies
-	docker compose exec -T waterbodies bash -c "pip install -e ."
+	docker compose exec -T waterbodies bash -c "pip install --extra-index-url="https://packages.dea.ga.gov.au" -e ."
 
 sleep:
 	sleep 1m
