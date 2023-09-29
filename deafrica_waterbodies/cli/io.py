@@ -5,13 +5,14 @@ import logging
 import os
 import shutil
 import uuid
-
+import fsspec
 import boto3
 import geopandas as gpd
 from botocore.client import ClientError
 from mypy_boto3_s3 import S3Client
 
-from deafrica_waterbodies.waterbodies.timeseries.io import check_s3_bucket_exists
+from deafrica_waterbodies.waterbodies.timeseries.io import check_dir_exists, check_s3_bucket_exists
+
 
 _log = logging.getLogger(__name__)
 
@@ -112,17 +113,16 @@ def write_waterbodies_to_file(
     if storage_location == "local":
         try:
             local_dir_fp = os.path.join(output_local_folder, object_prefix)
-
-            if not os.path.exists(local_dir_fp):
-                os.makedirs(local_dir_fp)
+            fs = fsspec.filesystem("file")
+            if not check_dir_exists(local_dir_fp):
+                fs.makedirs(local_dir_fp, exists_ok=True)
                 _log.info(f"Output folder {local_dir_fp} created.")
 
             local_file_fp = os.path.join(local_dir_fp, object_name)
-            absolute_local_file_fp = os.path.abspath(local_file_fp)
 
-            waterbodies_gdf.to_file(absolute_local_file_fp)
+            waterbodies_gdf.to_file(local_file_fp)
 
-            _log.info(f"Waterbodies written to local disk as {absolute_local_file_fp}")
+            _log.info(f"Waterbodies written to local disk as {local_file_fp}")
 
         except Exception as error:
             _log.error(error)
@@ -144,14 +144,16 @@ def write_waterbodies_to_file(
                 # Make a temporary folder
                 myuuid = str(uuid.uuid1())[:6]
                 local_temp_dir = f"temp_{myuuid}"
-                os.mkdir(local_temp_dir)
+
+                fs = fsspec.filesystem("file")
+                fs.mkdirs(local_temp_dir, exists_ok=True)
 
                 # Write the waterbodies to the temporary folder.
                 local_temp_shapefile_fp = os.path.join(local_temp_dir, object_name)
                 waterbodies_gdf.to_file(local_temp_shapefile_fp)
 
                 # Upload each object in the temporary folder into s3.
-                local_temp_files = os.listdir(local_temp_dir)
+                local_temp_files = fs.listdir(local_temp_dir)
                 for local_temp_file in local_temp_files:
                     local_temp_file_fp = os.path.join(local_temp_dir, local_temp_file)
                     upload_file_to_s3(
@@ -162,7 +164,7 @@ def write_waterbodies_to_file(
                     )
 
                 # Delete temporary folder.
-                shutil.rmtree(local_temp_dir)
+                fs.rm(local_temp_dir, recursive=True)
 
             _log.info(f"Waterbodies written to s3 bucket {output_bucket_name} as {s3_uri}")
 
