@@ -26,3 +26,5 @@ moto[all]
 odc-apps-dc-tools --extra-index-url="https://packages.dea.ga.gov.au"
 # To match osgeo/gdal:ubuntu-small-3.6.3 in Dockerfile
 gdal==3.6.3
+# Required in indexing data for tests.
+SQLAlchemy<2.0
