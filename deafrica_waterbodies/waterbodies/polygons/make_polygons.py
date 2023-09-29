@@ -9,14 +9,17 @@ Geoscience Australia - 2021
 
 import logging
 import math
-
+import multiprocessing
+from functools import partial
 import datacube
+import datacube.model
 import geopandas as gpd
 import numpy as np
 import pandas as pd
 import shapely
 from datacube.utils.geometry import Geometry
 from deafrica_tools.spatial import xr_vectorize
+import tqdm
 
 from deafrica_waterbodies.waterbodies.polygons.attributes import assign_unique_ids
 from deafrica_waterbodies.waterbodies.polygons.filters import (
@@ -27,70 +30,60 @@ from deafrica_waterbodies.waterbodies.polygons.filters import (
 _log = logging.getLogger(__name__)
 
 
-def get_product_regions(product: str) -> gpd.GeoDataFrame:
+def check_ds_intersects_polygons(polygons_gdf: gpd.GeoDataFrame, ds: datacube.model.Dataset) -> datacube.model.Dataset | None:
     """
-    Returns a GeoDataFrame of all the tiles/regions of the DE Africa product.
+    Check if the extent of a dataset intersects with a set of polygons.
 
     Parameters
     ----------
-    product: str
-        DE Africa product to get regions for.
+    polygons_gdf : gpd.GeoDataFrame
+    ds : datacube.model.Dataset
 
     Returns
     -------
-    gpd.GeoDataFrame
-        Regions of the DE Africa product.
-
+    datacube.model.Dataset | None
+        Retruns
     """
-    base_url = "https://explorer.digitalearth.africa/api/regions/"
-    regions_url = f"{base_url}{product}"
-
-    try:
-        regions = gpd.read_file(regions_url).drop("count", axis=1)
-        regions.set_index("region_code", inplace=True)
-        return regions
-    except Exception as error:
-        _log.exception(error)
-        raise error
-
-
-def get_product_tiles(
-    product: str = "wofs_ls_summary_alltime", aoi_gdf: gpd.GeoDataFrame = None
-) -> gpd.GeoDataFrame:
-    """
-    Returns the regions/tiles of the DE Africa product that intersect with
-    the area of interest GeoDataFrame.
-
-    Parameters
-    ----------
-    product : str, optional
-        Digital Earth Africa product, by default "wofs_ls_summary_alltime"
-    aoi_gdf : gpd.GeoDataFrame, optional
-        GeoDataFrame of the area of interest, by default None
-
-    Returns
-    -------
-    gpd.GeoDataFrame
-        Regions/tiles of the DE Africa product that intersect with
-        the area of interest GeoDataFrame.
-    """
-
-    # Load the product regions.
-    regions = get_product_regions(product=product)
-
-    if aoi_gdf is None:
-        _log.info(f"Getting all {product} regions...")
-        tiles = regions
+    # Get the extent of the dataset.
+    ds_extent = ds.extent
+    # Reproject the extent of the dataset to match the polygons.
+    ds_extent = ds_extent.to_crs(polygons_gdf.crs)
+    # Get the shapely geometry of the reprojected extent of the dataset.
+    ds_extent_geom = ds_extent.geom
+    # Check if the dataset's extent intersects with any of the polygons.
+    check_intersection = polygons_gdf.geometry.intersects(ds_extent_geom).any()
+    if check_intersection:
+        return ds
     else:
-        # Reproject the regions to match the area of interest.
-        crs = aoi_gdf.crs
-        regions = regions.to_crs(crs)
+        return None
 
-        tiles, _ = filter_geodataframe_by_intersection(
-            regions, aoi_gdf, filtertype="intersects", invert_mask=False, return_inverse=False
-        )
-    _log.info(f"{len(tiles)} {product} tiles found.")
-    return tiles
+
+def filter_datasets(dss: list[datacube.model.Dataset], polygons_gdf: gpd.GeoDataFrame, num_workers: int = 8) -> list[datacube.model.Dataset]:
+    """
+    Filter out datasets that do not intersect with a set of polygons, using a
+    multi-process approach to run the `check_ds_intersects_polygons` function.
+
+    Parameters
+    ----------
+    dss : list[datacube.model.Dataset]
+        A list of Datasets to filter.
+    polygons_gdf : gpd.GeoDataFrame
+        A set of polygons in a GeoDataFrame
+    num_workers : int, optional
+        Number of worker processes, by default 8
+
+    Returns
+    -------
+    list[str]
+        A list of the filtered datasets.
+    """
+    with multiprocessing.Pool(processes=num_workers) as pool:
+        filtered_datasets_ids_ = list(tqdm.tqdm(pool.imap(partial(check_ds_intersects_polygons, polygons_gdf), dss)))
+
+    # Remove empty strings.
+    filtered_datasets_ids = [item for item in filtered_datasets_ids_ if item]
+
+    return filtered_datasets_ids
 
 
 def check_wetness_thresholds(minimum_wet_thresholds: list) -> str:
@@ -132,20 +125,21 @@ def check_wetness_thresholds(minimum_wet_thresholds: list) -> str:
 
 
 def get_polygons_using_thresholds(
-    input_gdf: gpd.GeoDataFrame,
+    aoi_gdf: gpd.GeoDataFrame,
     dask_chunks: dict[str, int] = {"x": 3000, "y": 3000, "time": 1},
     resolution: tuple[int, int] = (-30, 30),
     output_crs: str = "EPSG:6933",
     min_valid_observations: int = 128,
     primary_threshold: float = 0.1,
     secondary_threshold: float = 0.05,
-) -> [gpd.GeoDataFrame, gpd.GeoDataFrame]:
+    num_workers: int = 8,
+) -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
     """
     Generate polygons by thresholding WOfS All Time Summary data.
 
     Parameters
     ----------
-    input_gdf : gpd.geodataframe.GeoDataFrame
+    aoi_gdf : gpd.geodataframe.GeoDataFrame
         Area of interest GeoDataFrame
     dask_chunks : dict, optional
         dask_chunks to use to load WOfS data, by default {"x": 3000, "y": 3000, "time": 1}
@@ -159,11 +153,12 @@ def get_polygons_using_thresholds(
         Threshold to use to determine the location of the waterbody polygons, by default 0.1
     secondary_threshold : float, optional
         Threshold to use to determine the extent / shape of the waterbodies polygons, by default 0.05
-
+    num_workers : int, optional
+        Number of worker processes, by default 8
     Returns
     -------
-    [gpd.GeoDataFrame, gpd.GeoDataFrame]
-        A list containing GeoDataFrames of waterbody polygons generated from thresholding WOfS All Time Summary data
+    tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]
+        A tuple containing GeoDataFrames of waterbody polygons generated from thresholding WOfS All Time Summary data
         using the primary and secondary thresholds.
 
     """
@@ -179,10 +174,18 @@ def get_polygons_using_thresholds(
     )
 
     # Reproject the input_gdf.
-    input_gdf = input_gdf.to_crs(output_crs)
+    aoi_gdf = aoi_gdf.to_crs(output_crs)
 
     # Connect to the datacube.
     dc = datacube.Datacube(app="WaterbodiesPolygons")
+
+    # Find all datasets available for the WOfS All Time summary product.
+    dss = dc.index.datasets.search(product=["wofs_ls_summary_alltime"])
+    dss = list(dss)
+
+    # Filter the datasets to the area of interest.
+    filtered_datasets_ids = filter_datasets(dss, input_gdf)
+
 
     primary_threshold_polygons_list = []
     secondary_threshold_polygons_list = []
