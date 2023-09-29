@@ -44,18 +44,21 @@ def check_ds_intersects_polygons(polygons_gdf: gpd.GeoDataFrame, ds: datacube.mo
     datacube.model.Dataset | None
         Retruns
     """
-    # Get the extent of the dataset.
-    ds_extent = ds.extent
-    # Reproject the extent of the dataset to match the polygons.
-    ds_extent = ds_extent.to_crs(polygons_gdf.crs)
-    # Get the shapely geometry of the reprojected extent of the dataset.
-    ds_extent_geom = ds_extent.geom
-    # Check if the dataset's extent intersects with any of the polygons.
-    check_intersection = polygons_gdf.geometry.intersects(ds_extent_geom).any()
-    if check_intersection:
-        return ds
+    if polygons_gdf is not None:
+        # Get the extent of the dataset.
+        ds_extent = ds.extent
+        # Reproject the extent of the dataset to match the polygons.
+        ds_extent = ds_extent.to_crs(polygons_gdf.crs)
+        # Get the shapely geometry of the reprojected extent of the dataset.
+        ds_extent_geom = ds_extent.geom
+        # Check if the dataset's extent intersects with any of the polygons.
+        check_intersection = polygons_gdf.geometry.intersects(ds_extent_geom).any()
+        if check_intersection:
+            return ds
+        else:
+            return None
     else:
-        return None
+        return ds
 
 
 def filter_datasets(dss: list[datacube.model.Dataset], polygons_gdf: gpd.GeoDataFrame, num_workers: int = 8) -> list[datacube.model.Dataset]:
@@ -74,16 +77,16 @@ def filter_datasets(dss: list[datacube.model.Dataset], polygons_gdf: gpd.GeoData
 
     Returns
     -------
-    list[str]
+    list[datacube.model.Dataset]
         A list of the filtered datasets.
     """
     with multiprocessing.Pool(processes=num_workers) as pool:
-        filtered_datasets_ids_ = list(tqdm.tqdm(pool.imap(partial(check_ds_intersects_polygons, polygons_gdf), dss)))
+        filtered_datasets_ = list(tqdm.tqdm(pool.imap(partial(check_ds_intersects_polygons, polygons_gdf), dss)))
 
     # Remove empty strings.
-    filtered_datasets_ids = [item for item in filtered_datasets_ids_ if item]
+    filtered_datasets = [item for item in filtered_datasets_ if item]
 
-    return filtered_datasets_ids
+    return filtered_datasets
 
 
 def check_wetness_thresholds(minimum_wet_thresholds: list) -> str:
@@ -126,7 +129,7 @@ def check_wetness_thresholds(minimum_wet_thresholds: list) -> str:
 
 def get_polygons_using_thresholds(
     aoi_gdf: gpd.GeoDataFrame,
-    dask_chunks: dict[str, int] = {"x": 3000, "y": 3000, "time": 1},
+    dask_chunks: dict[str, int] = {"x": 3200, "y": 3200, "time": 1},
     resolution: tuple[int, int] = (-30, 30),
     output_crs: str = "EPSG:6933",
     min_valid_observations: int = 128,
@@ -184,7 +187,7 @@ def get_polygons_using_thresholds(
     dss = list(dss)
 
     # Filter the datasets to the area of interest.
-    filtered_datasets_ids = filter_datasets(dss, input_gdf)
+    filtered_datasets = filter_datasets(dss, aoi_gdf)
 
 
     primary_threshold_polygons_list = []
@@ -320,7 +323,7 @@ def merge_polygons_at_tile_boundary(
 def get_waterbodies(
     aoi_gdf: gpd.GeoDataFrame,
     continental_run: bool = False,
-    dask_chunks: dict[str, int] = {"x": 3000, "y": 3000, "time": 1},
+    dask_chunks: dict[str, int] = {"x": 3200, "y": 3200, "time": 1},
     resolution: tuple[int, int] = (-30, 30),
     output_crs: str = "EPSG:6933",
     min_valid_observations: int = 128,
