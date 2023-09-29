@@ -1,62 +1,73 @@
-build-image:
-	docker build . \
-		--tag GeoscienceAustralia/dea-waterbodies:test \
-		--build-arg ENVIRONMENT=test
+SHELL := /bin/bash
 
-build-prod-image:
-	docker build . \
-		--tag GeoscienceAustralia/dea-waterbodies:latest \
-		--build-arg ENVIRONMENT=deployment
+.DEFAULT_GOAL := help
 
-run-prod:
-	docker run --rm \
-		GeoscienceAustralia/dea-waterbodies
+.PHONY: help setup up down clean test
 
-test-local:
-	pytest tests
+PRODUCT_CATALOG = "https://raw.githubusercontent.com/digitalearthafrica/config/master/prod/products_prod.csv"
 
+help: ## Print this help
+	@grep -E '^##.*$$' $(MAKEFILE_LIST) | cut -c'4-'
+	@echo
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-10s\033[0m %s\n", $$1, $$2}'
 
-# Docker Compose environment
-build:
-	docker-compose build
+build: ## 0. Build the base image
+	docker compose pull
+	docker compose build
 
-up:
-	docker-compose up
+up: ## 1. Bring up your Docker environment.
+	docker compose up -d 
+##	docker compose up -d postgres
+##	docker compose up -d conflux
+##	docker compose up -d index
 
-down:
-	docker-compose down
+init: ## 2. Prepare the database, initialise the database schema.
+	docker compose exec -T index datacube -v system init --no-default-types --no-init-users
 
-shell:
-	docker-compose exec waterbodies bash
+metadata: ## 3. Add metadata types.
+	docker compose exec -T index datacube -v metadata add https://raw.githubusercontent.com/digitalearthafrica/config/master/metadata/eo3_deafrica.odc-type.yaml
+	docker compose exec -T index datacube -v metadata add https://raw.githubusercontent.com/digitalearthafrica/config/master/metadata/eo3_landsat_ard.odc-type.yaml
+
+products: ## 3. Add the wofs_ls product definition for testing.
+	docker compose exec -T index datacube -v product add https://raw.githubusercontent.com/digitalearthafrica/config/master/products/wofs_ls_summary_alltime.odc-product.yaml
+
+index: ## 4. Index the test data.
+	cat index_tiles.sh | docker compose exec -T index bash
+
+install-waterbodies: ## 5. Install deafrica-waterbodies
+	docker compose exec -T waterbodies bash -c "pip install -e ."
+
+sleep:
+	sleep 1m
+
+test-env: build up sleep init metadata products index install-waterbodies
+
+run-tests:
+	docker compose exec -T waterbodies bash -c "coverage run -m pytest ."
+	docker compose exec -T waterbodies bash -c "coverage report -m"
+	docker compose exec -T waterbodies bash -c "coverage xml"
+	docker compose exec -T waterbodies bash -c "coverage html"
 
 test:
 	docker-compose exec waterbodies pytest tests
 
+down: ## Bring down the system
+	docker compose down
+
+shell: ## Start an interactive shell
+	docker compose exec waterbodies bash
+
+clean: ## Delete everything
+	docker compose down --rmi all -v
+
+logs: ## Show the logs from the stack
+	docker compose logs --follow
+
+pip_compile:
+	pip-compile --verbose \
+		--extra-index-url=https://packages.dea.ga.gov.au \
+		--output-file requirements.txt \
+		requirements.in
+
 lint:
 	docker-compose exec waterbodies black --check dea_waterbodies
-
-integration-test:
-	docker-compose up -d
-	docker-compose exec -T dea_waterbodies bash ./tests/integration_tests.sh
-
-# C3 Related
-initdb:
-	docker-compose exec waterbodies \
-		datacube system init
-
-metadata:
-	docker-compose exec waterbodies \
-		datacube metadata add https://raw.githubusercontent.com/GeoscienceAustralia/digitalearthau/develop/digitalearthau/config/eo3/eo3_landsat_ard.odc-type.yaml
-
-product:
-	docker-compose exec waterbodies \
-		datacube product add \
-        https://raw.githubusercontent.com/GeoscienceAustralia/digitalearthau/master/digitalearthau/config/products/wofs_albers.odc-product.yaml \
-		https://raw.githubusercontent.com/GeoscienceAustralia/digitalearthau/master/digitalearthau/config/products/wofs_filtered_summary.odc-product.yaml \
-		https://raw.githubusercontent.com/GeoscienceAustralia/digitalearthau/master/digitalearthau/config/products/wofs_summary.odc-product.yaml
-
-index:
-	docker-compose exec waterbodies \
-		datacube dataset add --ignore-lineage --confirm-ignore-lineage \
-			s3://dea-public-data/WOfS/filtered_summary/v2.1.0/combined/x_15/y_-40/wofs_filtered_summary_15_-40.yaml \
-			s3://dea-public-data/WOfS/summary/v2.1.0/combined/x_15/y_-40/WOFS_3577_15_-40_summary.yaml
