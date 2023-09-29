@@ -25,25 +25,25 @@ classifiers=[
 ]
 requires-python = ">=3.6.0"
 dependencies = [
+    'boto3',
+    'boto3-stubs[sqs,s3]',
+    'botocore',
+    'click',
+    'datacube',
+    'deafrica-tools >= 2.1.3',
+    'fsspec',
+    'gdal',
+    'geopandas',
     'numpy',
     'pandas',
-    'geopandas',
-    'python-geohash',
-    'datacube',
-    'shapely',
-    'click',
-    'fsspec',
-    'boto3',
-    'botocore',
-    'rasterio',
-    's3urls',
     'python-dateutil',
-    'deafrica-tools >= 2.0.3',
-    'boto3-stubs[sqs,s3]',
+    'python-geohash',
+    'shapely',
+    'tqdm'
     # Code style
-    'flake8',
-    'black', 
+    'black',
     'isort',
+    'flake8',
     # Testing
     'pytest',
 ]
