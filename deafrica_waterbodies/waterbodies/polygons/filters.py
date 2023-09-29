@@ -111,7 +111,7 @@ def pp_test_gdf(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 
 
 def split_large_polygons(
-    input_gdf: gpd.GeoDataFrame, pp_thresh: int = 0.005, method: str = "nothing"
+    input_gdf: gpd.GeoDataFrame, pp_thresh: float = 0.005, method: str = "nothing"
 ) -> gpd.GeoDataFrame:
     """
     Function to split large polygons.
@@ -120,7 +120,7 @@ def split_large_polygons(
     ----------
     input_gdf : gpd.GeoDataFrame
         Set of polygons for which to split the large polygons.
-    pp_thresh : int, optional
+    pp_thresh : float, optional
         Threshold for the Polsby–Popper test values of the polygons by which to
         classify is a polygon is large or not, by default 0.005
     method : str, optional
@@ -243,11 +243,11 @@ def filter_waterbodies(
     min_polygon_size: float = 4500,
     max_polygon_size: float = math.inf,
     filter_out_ocean_polygons: bool = False,
-    land_sea_mask_fp: str = None,
+    land_sea_mask_fp: str | None = None,
     filter_out_major_rivers_polygons: bool = False,
-    major_rivers_mask_fp: str = None,
+    major_rivers_mask_fp: str | None = None,
     filter_out_urban_polygons: bool = False,
-    urban_mask_fp: str = None,
+    urban_mask_fp: str | None = None,
     handle_large_polygons: str = "nothing",
     pp_test_threshold: float = 0.005,
 ) -> gpd.GeoDataFrame:
@@ -266,15 +266,15 @@ def filter_waterbodies(
         Maximum area of a waterbody polygon to be included in the output polygons, by default math.inf
     filter_out_ocean_polygons : bool, optional
         If True, filter out ocean waterbody polygons using the polygons from `land_sea_mask_fp`, by default False
-    land_sea_mask_fp : str, optional
+    land_sea_mask_fp : str | None, optional
         Vector file path to the polygons to use to filter out ocean waterbody polygons, by default None
     filter_out_major_rivers_polygons : bool, optional
         If True filter out major rivers from the water body polygons, by default False
-    major_rivers_mask_fp : str, optional
+    major_rivers_mask_fp : str | None, optional
         Vector file path to the polygons to use to filter out major river waterbody polygons, by default None
     filter_out_urban_polygons : bool, optional
         If True filter out CBDs from the waterbody polygons, by default False
-    urban_mask_fp : str, optional
+    urban_mask_fp : str | None, optional
         Vector file path to the polygons to use to filter out CBDs, by default None
     handle_large_polygons : str, optional
         Method to use to split large water body polygons, by default "nothing"
