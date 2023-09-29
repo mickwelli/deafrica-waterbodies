@@ -1,30 +1,35 @@
-import os
-import boto3
-import urllib
-import logging
-import datetime
-import dateutil
-import datacube
 import collections
+import datetime
+import logging
+import os
+import urllib
+
+import boto3
+import datacube
+import dateutil
+import geopandas as gpd
 import numpy as np
 import pandas as pd
-import geopandas as gpd
-from tqdm.auto import tqdm
 from datacube.utils.geometry import Geometry
-from mypy_boto3_s3.client import S3Client
 from deafrica_tools.datahandling import wofs_fuser
 from deafrica_tools.spatial import xr_rasterize
+from mypy_boto3_s3.client import S3Client
+from tqdm.auto import tqdm
 
 from deafrica_waterbodies.waterbodies.timeseries.id_field import guess_id_field
-from deafrica_waterbodies.waterbodies.timeseries.io import check_if_s3_uri, check_local_dir_exists, check_local_file_exists, check_s3_object_exists
+from deafrica_waterbodies.waterbodies.timeseries.io import (
+    check_if_s3_uri,
+    check_local_dir_exists,
+    check_local_file_exists,
+    check_s3_object_exists,
+)
 
 _log = logging.getLogger(__name__)
 
 
 def get_polygon_ids_for_missing_timeseries(
-        polygons_gdf: gpd.GeoDataFrame,
-        output_directory: str,
-        s3_client: S3Client = None) -> [str]:
+    polygons_gdf: gpd.GeoDataFrame, output_directory: str, s3_client: S3Client = None
+) -> [str]:
     """
     Get IDs for polygons whose timeseries .csv file does not exist
     in the output directory.
@@ -58,9 +63,7 @@ def get_polygon_ids_for_missing_timeseries(
 
     try:
         if is_s3_uri:
-            check_s3_object_exists(output_directory,
-                                   error_if_exists=False,
-                                   s3_client=s3_client)
+            check_s3_object_exists(output_directory, error_if_exists=False, s3_client=s3_client)
         else:
             check_local_dir_exists(output_directory, error_if_exists=False)
     except FileNotFoundError as error:
@@ -72,17 +75,14 @@ def get_polygon_ids_for_missing_timeseries(
 
     polygons_wthout_timeseries = []
     for polygon_id in polygon_ids:
-
-        timeseries_fp = os.path.join(output_directory, polygon_id[:4], f'{polygon_id}.csv')
+        timeseries_fp = os.path.join(output_directory, polygon_id[:4], f"{polygon_id}.csv")
 
         # Check if file exists.
         is_s3_uri = check_if_s3_uri(timeseries_fp)
 
         try:
             if is_s3_uri:
-                check_s3_object_exists(timeseries_fp,
-                                       error_if_exists=False,
-                                       s3_client=s3_client)
+                check_s3_object_exists(timeseries_fp, error_if_exists=False, s3_client=s3_client)
             else:
                 check_local_file_exists(timeseries_fp, error_if_exists=False)
         except FileNotFoundError:
@@ -94,8 +94,8 @@ def get_polygon_ids_for_missing_timeseries(
 
 
 def get_last_observation_date_from_csv(
-        csv_file_path: str,
-        s3_client: S3Client = None) -> pd.Timestamp:
+    csv_file_path: str, s3_client: S3Client = None
+) -> pd.Timestamp:
     """
     Get the date of the last observation from a water body polygon's
     timeseries csv file.
@@ -122,9 +122,7 @@ def get_last_observation_date_from_csv(
 
     try:
         if is_s3_uri:
-            check_s3_object_exists(csv_file_path,
-                                   error_if_exists=False,
-                                   s3_client=s3_client)
+            check_s3_object_exists(csv_file_path, error_if_exists=False, s3_client=s3_client)
         else:
             check_local_file_exists(csv_file_path, error_if_exists=False)
     except Exception as error:
@@ -136,27 +134,27 @@ def get_last_observation_date_from_csv(
     timeseries_df = pd.read_csv(csv_file_path)
 
     # Convert to datetime.
-    timeseries_df['Observation Date'] = pd.to_datetime(timeseries_df["Observation Date"])
+    timeseries_df["Observation Date"] = pd.to_datetime(timeseries_df["Observation Date"])
 
     # Sort in acending order
-    timeseries_df.sort_values(by='Observation Date', ascending=True, inplace=True)
+    timeseries_df.sort_values(by="Observation Date", ascending=True, inplace=True)
 
-    last_date = timeseries_df['Observation Date'].to_list()[-1]
+    last_date = timeseries_df["Observation Date"].to_list()[-1]
 
     return last_date
 
 
 def generate_timeseries_from_wofs_ls(
-        waterbodies_vector_file: str,
-        output_directory: str,
-        use_id: str,
-        missing_only: bool = False,
-        time_span: str = "all",
-        start_date: datetime.datetime = None,
-        end_date: datetime.datetime = None,
-        subset_polygons_ids: [str] = [],
-        include_uncertainity: bool = True,
-        ):
+    waterbodies_vector_file: str,
+    output_directory: str,
+    use_id: str,
+    missing_only: bool = False,
+    time_span: str = "all",
+    start_date: datetime.datetime = None,
+    end_date: datetime.datetime = None,
+    subset_polygons_ids: [str] = [],
+    include_uncertainity: bool = True,
+):
     """
     Function to generate a timeseries csv file for each waterbody polygon in the
     `waterbodies_vector_file`. The timeseries csv file for a waterbody polygon
@@ -221,9 +219,9 @@ def generate_timeseries_from_wofs_ls(
 
     # Get the IDs for the waterbody polygons.
     if missing_only:
-        polygon_ids = get_polygon_ids_for_missing_timeseries(polygons_gdf,
-                                                             output_directory,
-                                                             s3_client=s3_client)
+        polygon_ids = get_polygon_ids_for_missing_timeseries(
+            polygons_gdf, output_directory, s3_client=s3_client
+        )
     else:
         polygon_ids = polygons_gdf.index.to_list()
 
@@ -232,13 +230,17 @@ def generate_timeseries_from_wofs_ls(
 
     if time_span not in valid_time_span_options:
         _log.error(f"{time_span} is an invalid time span.")
-        raise ValueError(f"Please select a valid time span option: {' '.join(valid_time_span_options)}")
+        raise ValueError(
+            f"Please select a valid time span option: {' '.join(valid_time_span_options)}"
+        )
 
     # Checks.
     if time_span == "all":
         if start_date or end_date:
             _log.error("Time span set to all yet, start and end date specified.")
-            raise ValueError("If a time span is set to 'all' do not pass a start date nor an end date.")
+            raise ValueError(
+                "If a time span is set to 'all' do not pass a start date nor an end date."
+            )
         else:
             start_date_str = "1984"
             end_date_str = datetime.datetime.now().strftime("%Y-%m-%d")
@@ -265,7 +267,6 @@ def generate_timeseries_from_wofs_ls(
 
     with tqdm(total=len(polygon_ids)) as bar:
         for poly_id in polygon_ids:
-
             # Polygon's timeseries file path.
 
             # This is specific for DE Africa waterbodies which are expected
@@ -276,17 +277,21 @@ def generate_timeseries_from_wofs_ls(
                 path = urllib.parse.urlparse(timeseries_url).path
                 csv_file = os.path.split(path)[-1]
             except AttributeError:
-                csv_file = f'{poly_id}.csv'
+                csv_file = f"{poly_id}.csv"
 
             poly_timeseries_fp = os.path.join(output_directory, poly_id[:4], csv_file)
 
             if time_span == "append":
-                last_observation_date = get_last_observation_date_from_csv(poly_timeseries_fp, s3_client)
+                last_observation_date = get_last_observation_date_from_csv(
+                    poly_timeseries_fp, s3_client
+                )
                 start_date = last_observation_date + dateutil.relativedelta.relativedelta(days=1)
-                start_date_str = start_date.strftime('%Y-%m-%d')
+                start_date_str = start_date.strftime("%Y-%m-%d")
 
             time_range = (start_date_str, end_date_str)
-            _log.debug(f"Generating timeseries for {poly_id} for the time range: {time_range[0]} to {time_range[1]}.")
+            _log.debug(
+                f"Generating timeseries for {poly_id} for the time range: {time_range[0]} to {time_range[1]}."
+            )
 
             poly_geom = polygons_gdf.loc[poly_id].geometry
             poly_gdf = gpd.GeoDataFrame(geometry=[poly_geom], crs=output_crs)
@@ -307,14 +312,19 @@ def generate_timeseries_from_wofs_ls(
 
             # If no data is found.
             if not wofls_ds:
-                _log.info(f"There is no new data for {poly_id} for the time range: {time_range[0]} to {time_range[1]}.")
+                _log.info(
+                    f"There is no new data for {poly_id} for the time range: {time_range[0]} to {time_range[1]}."
+                )
                 continue
             else:
                 # Mask the loaded WOfS data using the rasterized waterbody polygon,
                 # if the height and width of the bounding box of the waterbody polygon
                 # are large than the length of a pixel.
                 pixel_length = resolution[1]  # should be a positive number.
-                if poly_geopolygon.boundingbox.height > pixel_length and poly_geopolygon.boundingbox.width > pixel_length:
+                if (
+                    poly_geopolygon.boundingbox.height > pixel_length
+                    and poly_geopolygon.boundingbox.width > pixel_length
+                ):
                     poly_mask = xr_rasterize(poly_gdf, wofls_da)
                     wofls_da_masked = wofls_da.where(poly_mask, np.nan)
                 else:
@@ -376,15 +386,21 @@ def generate_timeseries_from_wofs_ls(
 
                     # Convert the timestep date from numpy.datetime64 to string.
                     observation_date = pd.to_datetime(timestep)
-                    observation_date_str = observation_date.strftime('%Y-%m-%d')
+                    observation_date_str = observation_date.strftime("%Y-%m-%d")
 
                     poly_timeseries_data_dict["Observation Date"].extend([observation_date_str])
-                    #poly_timeseries_data_dict["Total pixel count"].extend([pixel_count])
-                    poly_timeseries_data_dict["Wet pixel percentage"].extend([valid_and_wet_percentage])
+                    # poly_timeseries_data_dict["Total pixel count"].extend([pixel_count])
+                    poly_timeseries_data_dict["Wet pixel percentage"].extend(
+                        [valid_and_wet_percentage]
+                    )
                     poly_timeseries_data_dict["Wet pixel count"].extend([valid_and_wet_count])
-                    poly_timeseries_data_dict["Dry pixel percentage"].extend([valid_and_dry_percentage])
+                    poly_timeseries_data_dict["Dry pixel percentage"].extend(
+                        [valid_and_dry_percentage]
+                    )
                     poly_timeseries_data_dict["Dry pixel count"].extend([valid_and_dry_count])
-                    poly_timeseries_data_dict["Invalid pixel percentage"].extend([invalid_percentage])
+                    poly_timeseries_data_dict["Invalid pixel percentage"].extend(
+                        [invalid_percentage]
+                    )
                     poly_timeseries_data_dict["Invalid pixel count"].extend([invalid_count])
 
                 # Convert the timeseries data dictionary for the polygon into
@@ -393,7 +409,9 @@ def generate_timeseries_from_wofs_ls(
 
                 if time_span == "append":
                     # Append the DataFrame to an existing csv file.
-                    poly_timeseries_df.to_csv(poly_timeseries_fp, mode="a", index=False, header=False)
+                    poly_timeseries_df.to_csv(
+                        poly_timeseries_fp, mode="a", index=False, header=False
+                    )
                 else:
                     # Write the DataFrame to a new csv file.
                     poly_timeseries_df.to_csv(poly_timeseries_fp, mode="w", index=False)

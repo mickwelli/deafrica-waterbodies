@@ -1,5 +1,5 @@
-import geopandas as gpd
 import geohash as gh
+import geopandas as gpd
 
 
 def assign_unique_ids(polygons: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
@@ -26,18 +26,20 @@ def assign_unique_ids(polygons: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 
     # Generate a unique id for each polygon.
     polygons_with_unique_ids = polygons.to_crs(epsg=4326)
-    polygons_with_unique_ids['UID'] = polygons_with_unique_ids.apply(lambda x: gh.encode(x.geometry.centroid.y, x.geometry.centroid.x, precision=9), axis=1)
+    polygons_with_unique_ids["UID"] = polygons_with_unique_ids.apply(
+        lambda x: gh.encode(x.geometry.centroid.y, x.geometry.centroid.x, precision=9), axis=1
+    )
 
     # Check that our unique ID is in fact unique
-    assert polygons_with_unique_ids['UID'].is_unique
+    assert polygons_with_unique_ids["UID"].is_unique
 
     # Make an arbitrary numerical ID for each polygon. We will first sort the dataframe by geohash
     # so that polygons close to each other are numbered similarly.
-    polygons_with_unique_ids_sorted = polygons_with_unique_ids.sort_values(by=['UID']).reset_index()
-    polygons_with_unique_ids_sorted['WB_ID'] = polygons_with_unique_ids_sorted.index
+    polygons_with_unique_ids_sorted = polygons_with_unique_ids.sort_values(by=["UID"]).reset_index()
+    polygons_with_unique_ids_sorted["WB_ID"] = polygons_with_unique_ids_sorted.index
 
     # The step above creates an 'index' column, which we don't actually want, so drop it.
-    polygons_with_unique_ids_sorted.drop(columns=['index'], inplace=True)
+    polygons_with_unique_ids_sorted.drop(columns=["index"], inplace=True)
 
     # Reproject to the same crs as the input polygons.
     polygons_with_unique_ids_sorted = polygons_with_unique_ids_sorted.to_crs(crs)
@@ -46,10 +48,10 @@ def assign_unique_ids(polygons: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 
 
 def get_timeseries_s3_object_url(
-        uid: str,
-        product_version: str,
-        output_bucket_name: str,
-        ) -> str:
+    uid: str,
+    product_version: str,
+    output_bucket_name: str,
+) -> str:
     """
     Get the timeseries s3 object URL given a unique identifier for a polygon.
 
@@ -84,9 +86,8 @@ def get_timeseries_s3_object_url(
 
 
 def add_timeseries_attribute(
-        polygons: gpd.GeoDataFrame,
-        product_version: str,
-        output_bucket_name: str) -> gpd.GeoDataFrame:
+    polygons: gpd.GeoDataFrame, product_version: str, output_bucket_name: str
+) -> gpd.GeoDataFrame:
     """
     Function to assign the s3 object URL for the timeseries for each waterbody polygon.
 
@@ -108,10 +109,14 @@ def add_timeseries_attribute(
         of the waterbody polygons.
     """
 
-    polygons["timeseries"] = polygons.apply(lambda row: get_timeseries_s3_object_url(row["UID"],
-                                                                                     product_version,
-                                                                                     output_bucket_name,
-                                                                                     ), axis=1)
+    polygons["timeseries"] = polygons.apply(
+        lambda row: get_timeseries_s3_object_url(
+            row["UID"],
+            product_version,
+            output_bucket_name,
+        ),
+        axis=1,
+    )
     return polygons
 
 

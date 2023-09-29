@@ -1,8 +1,9 @@
-import os
-import s3urls
-import urllib
-import boto3
 import logging
+import os
+import urllib
+
+import boto3
+import s3urls
 from botocore.exceptions import ClientError
 from mypy_boto3_s3 import S3Client
 
@@ -40,9 +41,7 @@ def check_if_s3_uri(file_path: str) -> bool:
         return False
 
 
-def check_local_dir_exists(
-        dir_path: str,
-        error_if_exists=True):
+def check_local_dir_exists(dir_path: str, error_if_exists=True):
     """
     Checks if a specified path is an existing directory.
     if `error_if_exists == True`, raises an error if the directory exists.
@@ -76,9 +75,7 @@ def check_local_dir_exists(
             raise FileNotFoundError(f"Directory {dir_path} does not exist!")
 
 
-def check_local_file_exists(
-        file_path: str,
-        error_if_exists=True):
+def check_local_file_exists(file_path: str, error_if_exists=True):
     """
     Checks if a specified path is an existing file.
     if `error_if_exists == True`, raises an error if the file exists.
@@ -113,9 +110,7 @@ def check_local_file_exists(
     return 0
 
 
-def check_s3_bucket_exists(
-        bucket_name: str,
-        s3_client: S3Client = None):
+def check_s3_bucket_exists(bucket_name: str, s3_client: S3Client = None):
     """
     Check if a bucket exists and if the user has permission to access it.
 
@@ -132,9 +127,9 @@ def check_s3_bucket_exists(
         s3_client = boto3.client("s3")
 
     try:
-        response = s3_client.head_bucket(Bucket=bucket_name) # noqa E501
+        response = s3_client.head_bucket(Bucket=bucket_name)  # noqa E501
     except ClientError as error:
-        error_code = int(error.response['Error']['Code'])
+        error_code = int(error.response["Error"]["Code"])
 
         if error_code == 403:
             raise PermissionError(f"{bucket_name} is a private Bucket. Forbidden Access!")
@@ -145,10 +140,7 @@ def check_s3_bucket_exists(
         raise error
 
 
-def check_s3_object_exists(
-        s3_object_uri: str,
-        error_if_exists=True,
-        s3_client: S3Client = None):
+def check_s3_object_exists(s3_object_uri: str, error_if_exists=True, s3_client: S3Client = None):
     """
     Check if an object in an S3 bucket exists.
     if error_if_exists is True, raises an error if the object exists.
@@ -180,7 +172,7 @@ def check_s3_object_exists(
             response = s3_client.head_object(Bucket=bucket_name, Key=object_key)
             raise FileExistsError(f"Object {s3_object_uri} already exists!")
         except ClientError as error:
-            error_code = int(error.response['Error']['Code'])
+            error_code = int(error.response["Error"]["Code"])
 
             # Object exists but user does not have access.
             if error_code == 403:
@@ -195,7 +187,7 @@ def check_s3_object_exists(
         try:
             response = s3_client.head_object(Bucket=bucket_name, Key=object_key)  # noqa E501
         except ClientError as error:
-            error_code = int(error.response['Error']['Code'])
+            error_code = int(error.response["Error"]["Code"])
 
             # Object exists but user does not have access.
             if error_code == 403:

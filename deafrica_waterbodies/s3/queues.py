@@ -6,24 +6,28 @@ Geoscience Australia
 """
 
 import json
+import logging
+import time
+
 import boto3
 import click
 import fsspec
-import logging
-import time
 from botocore.config import Config
 from botocore.exceptions import ClientError
 from mypy_boto3_sqs import SQSClient
 
-from deafrica_waterbodies.waterbodies.timeseries.io import check_if_s3_uri, check_s3_object_exists, check_local_file_exists
+from deafrica_waterbodies.waterbodies.timeseries.io import (
+    check_if_s3_uri,
+    check_local_file_exists,
+    check_s3_object_exists,
+)
 
 _log = logging.getLogger(__name__)
 
 
 # From the AWS Code Examples Repository
 # https://github.com/awsdocs/aws-doc-sdk-examples/tree/main/python/example_code/sqs#code-examples
-def get_queue_url(queue_name: str,
-                  sqs_client: SQSClient = None) -> str:
+def get_queue_url(queue_name: str, sqs_client: SQSClient = None) -> str:
     """
     Get the URL of an existing Amazon SQS queue by name, e.g., alex-really-secret-queue
 
@@ -54,9 +58,7 @@ def get_queue_url(queue_name: str,
         return queue_url
 
 
-def get_queue_attribute(queue_name: str,
-                        attribute_name: str,
-                        sqs_client: SQSClient = None) -> str:
+def get_queue_attribute(queue_name: str, attribute_name: str, sqs_client: SQSClient = None) -> str:
     """
     Get the attribute value for the specified queue and attribute name.
 
@@ -85,8 +87,9 @@ def get_queue_attribute(queue_name: str,
 
     # Get the queue attribute.
     try:
-        response = sqs_client.get_queue_attributes(QueueUrl=queue_url,
-                                                   AttributeNames=[attribute_name])
+        response = sqs_client.get_queue_attributes(
+            QueueUrl=queue_url, AttributeNames=[attribute_name]
+        )
     except ClientError as error:
         _log.exception(f"Couldn't get attribute {attribute_name} for queue named {queue_name}.")
         raise error
@@ -110,12 +113,13 @@ def verify_queue_name(queue_name: str):
 
 
 def make_source_queue(
-        queue_name: str,
-        dead_letter_queue_name: str,
-        timeout: int = 2 * 60,
-        retries: int = 5,
-        retention_period: int = 60,
-        sqs_client: SQSClient = None):
+    queue_name: str,
+    dead_letter_queue_name: str,
+    timeout: int = 2 * 60,
+    retries: int = 5,
+    retention_period: int = 60,
+    sqs_client: SQSClient = None,
+):
     """
     Creates an Amazon SQS queue.
 
@@ -140,33 +144,30 @@ def make_source_queue(
     verify_queue_name(queue_name)
 
     # Retry configuration.
-    retry_config = {'max_attempts': 10,
-                    'mode': 'standard'}
+    retry_config = {"max_attempts": 10, "mode": "standard"}
 
     # Create SQS client
     if sqs_client is None:
-        sqs_client = boto3.client("sqs",
-                                  config=Config(retries=retry_config))
+        sqs_client = boto3.client("sqs", config=Config(retries=retry_config))
     else:
         sqs_client.meta.config.retries = retry_config
 
     # Queue attributes.
-    queue_attributes = dict(VisibilityTimeout=str(timeout),
-                            MessageRetentionPeriod=str(retention_period))
+    queue_attributes = dict(
+        VisibilityTimeout=str(timeout), MessageRetentionPeriod=str(retention_period)
+    )
 
     if dead_letter_queue_name:
         # Get the Amazon Resource Name (ARN) of the dead-letter queue.
-        dead_letter_queue_arn = get_queue_attribute(dead_letter_queue_name, 'QueueArn', sqs_client)
+        dead_letter_queue_arn = get_queue_attribute(dead_letter_queue_name, "QueueArn", sqs_client)
         # Parameters for the dead-letter queue functionality of the source
         # queue as a JSON object.
-        redrive_policy = {'deadLetterTargetArn': dead_letter_queue_arn,
-                          'maxReceiveCount': '10'}
+        redrive_policy = {"deadLetterTargetArn": dead_letter_queue_arn, "maxReceiveCount": "10"}
         queue_attributes["RedrivePolicy"] = json.dumps(redrive_policy)
 
     # Create the queue.
     try:
-        response = sqs_client.create_queue(QueueName=queue_name,
-                                           Attributes=queue_attributes)
+        response = sqs_client.create_queue(QueueName=queue_name, Attributes=queue_attributes)
     except ClientError as error:
         _log.exception(f"Couldn't create the queue {queue_name}.")
         raise error
@@ -176,8 +177,7 @@ def make_source_queue(
     return 0
 
 
-def delete_queue(queue_name: str,
-                 sqs_client: SQSClient = None):
+def delete_queue(queue_name: str, sqs_client: SQSClient = None):
     """
     Deletes a queue, regardless of the queue's contents.
 
@@ -200,7 +200,7 @@ def delete_queue(queue_name: str,
 
     # Delete the queue.
     try:
-        response = sqs_client.delete_queue(QueueUrl=queue_url) # noqa F841
+        response = sqs_client.delete_queue(QueueUrl=queue_url)  # noqa F841
     except ClientError as error:
         _log.exception(f"Couldn't delete the queue {queue_name}.")
         raise error
@@ -211,9 +211,8 @@ def delete_queue(queue_name: str,
 
 
 def move_to_deadletter_queue(
-        deadletter_queue_name: str,
-        message_body: str,
-        sqs_client: SQSClient = None):
+    deadletter_queue_name: str, message_body: str, sqs_client: SQSClient = None
+):
     """
     Deliver a message to the dead-letter SQS queue.
 
@@ -237,22 +236,18 @@ def move_to_deadletter_queue(
 
     # Only send one message, so 1 is OK as the identifier for a message in this
     # batch used to communicate the result.
-    entry = {"Id": "1",
-             "MessageBody": str(message_body)}
+    entry = {"Id": "1", "MessageBody": str(message_body)}
     # Send message to SQS queue
     try:
-        response = sqs_client.send_message_batch(QueueUrl=deadletter_queue_url, # noqa F841
-                                                 Entries=[entry])
+        response = sqs_client.send_message_batch(
+            QueueUrl=deadletter_queue_url, Entries=[entry]  # noqa F841
+        )
     except ClientError as error:
         _log.exception(f"Send message failed: {str(message_body)}")
         raise error
 
 
-def _post_messages_batch(
-        sqs_client: SQSClient,
-        queue_url: str,
-        messages: list,
-        count: int) -> []:
+def _post_messages_batch(sqs_client: SQSClient, queue_url: str, messages: list, count: int) -> []:
     """
     Helper function for `push_to_queue_from_txt` function.
     Pushes a batch of 10 or less messages to the queue.
@@ -277,16 +272,12 @@ def _post_messages_batch(
     # Ensure the number of messages is 10 or less.
     assert len(messages) <= 10
     # Send the messages to the queue.
-    response = sqs_client.send_message_batch(QueueUrl=queue_url, # noqa F841
-                                             Entries=messages)
+    response = sqs_client.send_message_batch(QueueUrl=queue_url, Entries=messages)  # noqa F841
     _log.info(f"Added {count} messages...")
     return []
 
 
-def push_to_queue_from_txt(
-        text_file_path: str,
-        queue_name: str,
-        sqs_client: SQSClient = None):
+def push_to_queue_from_txt(text_file_path: str, queue_name: str, sqs_client: SQSClient = None):
     """
     Push lines of a text file to a SQS queue.
 
@@ -331,24 +322,21 @@ def push_to_queue_from_txt(
 
     # Send the ids from the text file as messages in
     # batches of 10.
-    _log.debug(f'Adding IDs {ids}')
+    _log.debug(f"Adding IDs {ids}")
 
     count = 0
     messages = []
     for id_ in ids:
-        message = {"Id": str(count),
-                   "MessageBody": str(id_)}
+        message = {"Id": str(count), "MessageBody": str(id_)}
         messages.append(message)
         count += 1
         if count % 10 == 0:
-            messages = _post_messages_batch(sqs_client=sqs_client,
-                                            queue_url=queue_url,
-                                            messages=messages,
-                                            count=count)
+            messages = _post_messages_batch(
+                sqs_client=sqs_client, queue_url=queue_url, messages=messages, count=count
+            )
 
     # Post the remaining messages, if there are any.
     if len(messages) > 0:
-        _post_messages_batch(sqs_client=sqs_client,
-                             queue_url=queue_url,
-                             messages=messages,
-                             count=count)
+        _post_messages_batch(
+            sqs_client=sqs_client, queue_url=queue_url, messages=messages, count=count
+        )

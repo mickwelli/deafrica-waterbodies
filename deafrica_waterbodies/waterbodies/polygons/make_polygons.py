@@ -7,20 +7,22 @@ Geoscience Australia - 2021
     Matthew Alger
 """
 
-import datacube
-import math
 import logging
-import shapely
+import math
+
+import datacube
+import geopandas as gpd
 import numpy as np
 import pandas as pd
-import geopandas as gpd
-
+import shapely
 from datacube.utils.geometry import Geometry
 from deafrica_tools.spatial import xr_vectorize
 
 from deafrica_waterbodies.waterbodies.polygons.attributes import assign_unique_ids
-from deafrica_waterbodies.waterbodies.polygons.filters import filter_geodataframe_by_intersection, filter_waterbodies
-
+from deafrica_waterbodies.waterbodies.polygons.filters import (
+    filter_geodataframe_by_intersection,
+    filter_waterbodies,
+)
 
 _log = logging.getLogger(__name__)
 
@@ -44,7 +46,7 @@ def get_product_regions(product: str) -> gpd.GeoDataFrame:
     regions_url = f"{base_url}{product}"
 
     try:
-        regions = gpd.read_file(regions_url).drop('count', axis=1)
+        regions = gpd.read_file(regions_url).drop("count", axis=1)
         regions.set_index("region_code", inplace=True)
         return regions
     except Exception as error:
@@ -53,8 +55,8 @@ def get_product_regions(product: str) -> gpd.GeoDataFrame:
 
 
 def get_product_tiles(
-        product: str = "wofs_ls_summary_alltime",
-        aoi_gdf: gpd.GeoDataFrame = None) -> gpd.GeoDataFrame:
+    product: str = "wofs_ls_summary_alltime", aoi_gdf: gpd.GeoDataFrame = None
+) -> gpd.GeoDataFrame:
     """
     Returns the regions/tiles of the DE Africa product that intersect with
     the area of interest GeoDataFrame.
@@ -84,11 +86,9 @@ def get_product_tiles(
         crs = aoi_gdf.crs
         regions = regions.to_crs(crs)
 
-        tiles, _ = filter_geodataframe_by_intersection(regions,
-                                                       aoi_gdf,
-                                                       filtertype="intersects",
-                                                       invert_mask=False,
-                                                       return_inverse=False)
+        tiles, _ = filter_geodataframe_by_intersection(
+            regions, aoi_gdf, filtertype="intersects", invert_mask=False, return_inverse=False
+        )
     _log.info(f"{len(tiles)} {product} tiles found.")
     return tiles
 
@@ -114,28 +114,32 @@ def check_wetness_thresholds(minimum_wet_thresholds: list) -> str:
 
     if minimum_wet_thresholds[0] > minimum_wet_thresholds[-1]:
         _log.error("Primary threshold value is less than the secondary threshold.")
-        error_msg = 'We will be running a hybrid wetness threshold. ' \
-            'Please ensure that the primary threshold has a higher value than the ' \
-            'secondary threshold. \n'
+        error_msg = (
+            "We will be running a hybrid wetness threshold. "
+            "Please ensure that the primary threshold has a higher value than the "
+            "secondary threshold. \n"
+        )
         raise ValueError(error_msg)
     else:
-        print_msg = 'We will be running a hybrid wetness threshold. \n' \
-            f'**You have set {minimum_wet_thresholds[-1]} as the ' \
-            'primary threshold, which will define the location of the waterbody ' \
-            f'polygons \n with {minimum_wet_thresholds[0]} set as the supplementary ' \
-            'threshold, which will define the extent/shape of the waterbody polygons.**'
-        return (print_msg)
+        print_msg = (
+            "We will be running a hybrid wetness threshold. \n"
+            f"**You have set {minimum_wet_thresholds[-1]} as the "
+            "primary threshold, which will define the location of the waterbody "
+            f"polygons \n with {minimum_wet_thresholds[0]} set as the supplementary "
+            "threshold, which will define the extent/shape of the waterbody polygons.**"
+        )
+        return print_msg
 
 
 def get_polygons_using_thresholds(
-        input_gdf: gpd.GeoDataFrame,
-        dask_chunks: dict[str, int] = {"x": 3000, "y": 3000, "time": 1},
-        resolution: tuple[int, int] = (-30, 30),
-        output_crs: str = "EPSG:6933",
-        min_valid_observations: int = 128,
-        primary_threshold: float = 0.1,
-        secondary_threshold: float = 0.05,
-        ) -> [gpd.GeoDataFrame, gpd.GeoDataFrame]:
+    input_gdf: gpd.GeoDataFrame,
+    dask_chunks: dict[str, int] = {"x": 3000, "y": 3000, "time": 1},
+    resolution: tuple[int, int] = (-30, 30),
+    output_crs: str = "EPSG:6933",
+    min_valid_observations: int = 128,
+    primary_threshold: float = 0.1,
+    secondary_threshold: float = 0.05,
+) -> [gpd.GeoDataFrame, gpd.GeoDataFrame]:
     """
     Generate polygons by thresholding WOfS All Time Summary data.
 
@@ -178,7 +182,7 @@ def get_polygons_using_thresholds(
     input_gdf = input_gdf.to_crs(output_crs)
 
     # Connect to the datacube.
-    dc = datacube.Datacube(app='WaterbodiesPolygons')
+    dc = datacube.Datacube(app="WaterbodiesPolygons")
 
     primary_threshold_polygons_list = []
     secondary_threshold_polygons_list = []
@@ -192,8 +196,7 @@ def get_polygons_using_thresholds(
 
         try:
             # Load the WOfS All-Time Summary of clear and wet observations.
-            wofs_alltime_summary = dc.load('wofs_ls_summary_alltime',
-                                           **query).squeeze()
+            wofs_alltime_summary = dc.load("wofs_ls_summary_alltime", **query).squeeze()
 
             # Set the no-data values to nan.
             # Masking here is done using the frequency measurement because for multiple
@@ -202,10 +205,14 @@ def get_polygons_using_thresholds(
             # count_wet measurements.
             # Note: it seems some pixels with NaN values in the frequency measurement
             # have a value of zero in the count_clear and/or the count_wet measurements.
-            wofs_alltime_summary = wofs_alltime_summary.where(~np.isnan(wofs_alltime_summary.frequency))
+            wofs_alltime_summary = wofs_alltime_summary.where(
+                ~np.isnan(wofs_alltime_summary.frequency)
+            )
 
             # Mask pixels not observed at least min_valid_observations times.
-            wofs_alltime_summary_valid_clear_count = wofs_alltime_summary.count_clear >= min_valid_observations
+            wofs_alltime_summary_valid_clear_count = (
+                wofs_alltime_summary.count_clear >= min_valid_observations
+            )
 
             # Generate the polygons.
             row_polygons = {}
@@ -215,18 +222,22 @@ def get_polygons_using_thresholds(
 
                 # Now find pixels that meet both the minimum valid observations
                 # and minimum wet threshold criteria.
-                wofs_alltime_summary_valid = wofs_alltime_summary_valid_wetness.where(wofs_alltime_summary_valid_wetness & wofs_alltime_summary_valid_clear_count)
+                wofs_alltime_summary_valid = wofs_alltime_summary_valid_wetness.where(
+                    wofs_alltime_summary_valid_wetness & wofs_alltime_summary_valid_clear_count
+                )
 
                 # Convert the raster to polygons.
                 # We use a mask of '1' to only generate polygons around values of '1' (not NaNs).
                 polygons_mask = wofs_alltime_summary_valid == 1
 
-                polygons = xr_vectorize(wofs_alltime_summary_valid,
-                                        mask=polygons_mask,
-                                        crs=wofs_alltime_summary.geobox.crs,)
+                polygons = xr_vectorize(
+                    wofs_alltime_summary_valid,
+                    mask=polygons_mask,
+                    crs=wofs_alltime_summary.geobox.crs,
+                )
 
                 # Combine any overlapping polygons.
-                merged_polygon_geoms = shapely.ops.unary_union(polygons['geometry'])
+                merged_polygon_geoms = shapely.ops.unary_union(polygons["geometry"])
 
                 # Turn the combined multipolygon back into a GeoDataFrame.
                 try:
@@ -245,8 +256,8 @@ def get_polygons_using_thresholds(
         except Exception as error:
             _log.exception(error)
             _log.exception(
-                f'\nTile {row_id} did not run. \n'
-                'This is probably because there are no waterbodies present in this tile.'
+                f"\nTile {row_id} did not run. \n"
+                "This is probably because there are no waterbodies present in this tile."
             )
     primary_threshold_polygons = pd.concat(primary_threshold_polygons_list)
     secondary_threshold_polygons = pd.concat(secondary_threshold_polygons_list)
@@ -255,8 +266,8 @@ def get_polygons_using_thresholds(
 
 
 def merge_polygons_at_tile_boundary(
-        input_polygons: gpd.GeoDataFrame,
-        tiles: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    input_polygons: gpd.GeoDataFrame, tiles: gpd.GeoDataFrame
+) -> gpd.GeoDataFrame:
     """
     Function to merge waterbody polygons located at tile boundaries.
 
@@ -281,43 +292,48 @@ def merge_polygons_at_tile_boundary(
 
     # Get the polygons at the tile boundaries.
     boundary_polygons, _, not_boundary_polygons = filter_geodataframe_by_intersection(
-        input_polygons,
-        buffered_30m_tiles_gdf,
-        invert_mask=False,
-        return_inverse=True)
+        input_polygons, buffered_30m_tiles_gdf, invert_mask=False, return_inverse=True
+    )
 
     # Now combine overlapping polygons in boundary_polygons.
-    merged_boundary_polygons_geoms = shapely.ops.unary_union(boundary_polygons['geometry'])
+    merged_boundary_polygons_geoms = shapely.ops.unary_union(boundary_polygons["geometry"])
 
     # `Explode` the multipolygon back out into individual polygons.
-    merged_boundary_polygons = gpd.GeoDataFrame(crs=input_polygons.crs, geometry=[merged_boundary_polygons_geoms])
-    merged_boundary_polygons = merged_boundary_polygons.explode(index_parts=True).reset_index(drop=True)
+    merged_boundary_polygons = gpd.GeoDataFrame(
+        crs=input_polygons.crs, geometry=[merged_boundary_polygons_geoms]
+    )
+    merged_boundary_polygons = merged_boundary_polygons.explode(index_parts=True).reset_index(
+        drop=True
+    )
 
     # Then combine our merged_boundary_polygons with the not_boundary_polygons.
-    all_polygons = gpd.GeoDataFrame(pd.concat([not_boundary_polygons, merged_boundary_polygons], ignore_index=True, sort=True)).set_geometry('geometry')
+    all_polygons = gpd.GeoDataFrame(
+        pd.concat([not_boundary_polygons, merged_boundary_polygons], ignore_index=True, sort=True)
+    ).set_geometry("geometry")
 
     return all_polygons
 
 
 def get_waterbodies(
-        aoi_gdf: gpd.GeoDataFrame,
-        continental_run: bool = False,
-        dask_chunks: dict[str, int] = {"x": 3000, "y": 3000, "time": 1},
-        resolution: tuple[int, int] = (-30, 30),
-        output_crs: str = "EPSG:6933",
-        min_valid_observations: int = 128,
-        primary_threshold: float = 0.1,
-        secondary_threshold: float = 0.05,
-        min_polygon_size: float = 4500,
-        max_polygon_size: float = math.inf,
-        filter_out_ocean_polygons: bool = False,
-        land_sea_mask_fp: str = None,
-        filter_out_major_rivers_polygons: bool = False,
-        major_rivers_mask_fp: str = None,
-        filter_out_urban_polygons: bool = False,
-        urban_mask_fp: str = None,
-        handle_large_polygons: str = "nothing",
-        pp_test_threshold: float = 0.005,) -> gpd.GeoDataFrame:
+    aoi_gdf: gpd.GeoDataFrame,
+    continental_run: bool = False,
+    dask_chunks: dict[str, int] = {"x": 3000, "y": 3000, "time": 1},
+    resolution: tuple[int, int] = (-30, 30),
+    output_crs: str = "EPSG:6933",
+    min_valid_observations: int = 128,
+    primary_threshold: float = 0.1,
+    secondary_threshold: float = 0.05,
+    min_polygon_size: float = 4500,
+    max_polygon_size: float = math.inf,
+    filter_out_ocean_polygons: bool = False,
+    land_sea_mask_fp: str = None,
+    filter_out_major_rivers_polygons: bool = False,
+    major_rivers_mask_fp: str = None,
+    filter_out_urban_polygons: bool = False,
+    urban_mask_fp: str = None,
+    handle_large_polygons: str = "nothing",
+    pp_test_threshold: float = 0.005,
+) -> gpd.GeoDataFrame:
     """
     Function to generate waterbody polygons for an area of interest.
 
@@ -377,7 +393,9 @@ def get_waterbodies(
         _log.error("Area of interest specified, yet run type is continental.")
         raise ValueError("If setting an area of interest, set `continental_run=False`")
     elif aoi_gdf is not None and not continental_run:
-        _log.info("Running for the WOfS All Time Summary tiles covering the defined area of interest...")
+        _log.info(
+            "Running for the WOfS All Time Summary tiles covering the defined area of interest..."
+        )
 
     # Get the tiles covering the area of interest.
     _log.info("Loading tiles..")
@@ -385,18 +403,21 @@ def get_waterbodies(
     tiles = get_product_tiles(product="wofs_ls_summary_alltime", aoi_gdf=aoi_gdf)
 
     _log.info("Generating the first temporary set of waterbody polygons.")
-    temp_primary, temp_secondary = get_polygons_using_thresholds(input_gdf=tiles,
-                                                                 dask_chunks=dask_chunks,
-                                                                 resolution=resolution,
-                                                                 output_crs=output_crs,
-                                                                 min_valid_observations=min_valid_observations,
-                                                                 primary_threshold=primary_threshold,
-                                                                 secondary_threshold=secondary_threshold,
-                                                                 )
+    temp_primary, temp_secondary = get_polygons_using_thresholds(
+        input_gdf=tiles,
+        dask_chunks=dask_chunks,
+        resolution=resolution,
+        output_crs=output_crs,
+        min_valid_observations=min_valid_observations,
+        primary_threshold=primary_threshold,
+        secondary_threshold=secondary_threshold,
+    )
 
     _log.info("Merging polygons at tile boundaries...")
     merged_temp_primary = merge_polygons_at_tile_boundary(input_polygons=temp_primary, tiles=tiles)
-    merged_temp_secondary = merge_polygons_at_tile_boundary(input_polygons=temp_secondary, tiles=tiles)
+    merged_temp_secondary = merge_polygons_at_tile_boundary(
+        input_polygons=temp_secondary, tiles=tiles
+    )
 
     _log.info("Filtering waterbodies...")
     filtered_polygons = filter_waterbodies(

@@ -1,27 +1,25 @@
 """
 Various I/O adaptors
 """
-import os
-import boto3
-import uuid
-import shutil
 import logging
+import os
+import shutil
+import uuid
+
+import boto3
 import geopandas as gpd
 from botocore.client import ClientError
 from mypy_boto3_s3 import S3Client
 
 from deafrica_waterbodies.waterbodies.timeseries.io import check_s3_bucket_exists
 
-
 _log = logging.getLogger(__name__)
 
 
 # From https://boto3.amazonaws.com/v1/documentation/api/latest/guide/s3-uploading-files.html
 def upload_file_to_s3(
-        file_name: str,
-        bucket_name: str,
-        object_name: str = None,
-        s3_client: S3Client = None) -> bool:
+    file_name: str, bucket_name: str, object_name: str = None, s3_client: S3Client = None
+) -> bool:
     """
     Upload a file to an S3 bucket.
 
@@ -53,7 +51,7 @@ def upload_file_to_s3(
 
     # Upload the file
     try:
-        response = s3_client.upload_file(file_name, bucket_name, object_name) # noqa F841
+        response = s3_client.upload_file(file_name, bucket_name, object_name)  # noqa F841
     except ClientError as error:
         _log.exception(error)
         return False
@@ -62,13 +60,14 @@ def upload_file_to_s3(
 
 
 def write_waterbodies_to_file(
-        waterbodies_gdf: gpd.GeoDataFrame,
-        product_version: str,
-        storage_location: str,
-        output_bucket_name: str,
-        output_local_folder: str,
-        output_file_name: str,
-        output_file_type: str):
+    waterbodies_gdf: gpd.GeoDataFrame,
+    product_version: str,
+    storage_location: str,
+    output_bucket_name: str,
+    output_local_folder: str,
+    output_file_name: str,
+    output_file_type: str,
+):
     """
     Function to GeoDataFrame of waterbody polygons to an ESRI Shapefile or GeoJSON file.
 
@@ -92,7 +91,7 @@ def write_waterbodies_to_file(
     """
 
     # Validate output file type.
-    valid_output_file_type = ['GeoJSON', 'Shapefile']
+    valid_output_file_type = ["GeoJSON", "Shapefile"]
     try:
         if output_file_type == "GeoJSON":
             output_file_extension = ".geojson"
@@ -100,7 +99,9 @@ def write_waterbodies_to_file(
             output_file_extension = ".shp"
         else:
             _log.error(f"{output_file_type} is not implemented.")
-            raise ValueError(f"Invalid output file type. Select a valid output from {valid_output_file_type}.")
+            raise ValueError(
+                f"Invalid output file type. Select a valid output from {valid_output_file_type}."
+            )
     except Exception as error:
         _log.exception(error)
         raise error
@@ -110,7 +111,6 @@ def write_waterbodies_to_file(
 
     if storage_location == "local":
         try:
-
             local_dir_fp = os.path.join(output_local_folder, object_prefix)
 
             if not os.path.exists(local_dir_fp):
@@ -137,13 +137,10 @@ def write_waterbodies_to_file(
         s3_uri = f"s3://{output_bucket_name}/{object_prefix}{object_name}"
 
         try:
-
             if output_file_extension == ".geojson":
-
                 waterbodies_gdf.to_file(s3_uri)
 
             elif output_file_extension == ".shp":
-
                 # Make a temporary folder
                 myuuid = str(uuid.uuid1())[:6]
                 local_temp_dir = f"temp_{myuuid}"
@@ -157,10 +154,12 @@ def write_waterbodies_to_file(
                 local_temp_files = os.listdir(local_temp_dir)
                 for local_temp_file in local_temp_files:
                     local_temp_file_fp = os.path.join(local_temp_dir, local_temp_file)
-                    upload_file_to_s3(file_name=local_temp_file_fp,
-                                      bucket_name=output_bucket_name,
-                                      object_name=f"{object_prefix}{local_temp_file}",
-                                      s3_client=s3_client)
+                    upload_file_to_s3(
+                        file_name=local_temp_file_fp,
+                        bucket_name=output_bucket_name,
+                        object_name=f"{object_prefix}{local_temp_file}",
+                        s3_client=s3_client,
+                    )
 
                 # Delete temporary folder.
                 shutil.rmtree(local_temp_dir)
