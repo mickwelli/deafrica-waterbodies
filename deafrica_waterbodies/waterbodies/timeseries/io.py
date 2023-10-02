@@ -2,7 +2,9 @@ import logging
 import urllib
 from pathlib import Path
 
+import boto3
 import fsspec
+from mypy_boto3_s3 import S3Client
 
 _log = logging.getLogger(__name__)
 
@@ -96,3 +98,33 @@ def check_file_exists(file_path: str | Path) -> bool:
             return False
     else:
         return False
+
+
+def check_s3_bucket_exists(bucket_name: str, s3_client: S3Client = None):
+    """
+    Check if a bucket exists and if the user has permission to access it.
+
+    Parameters
+    ----------
+    bucket_name : str
+        Name of s3 bucket to check.
+    s3_client : S3Client
+        A low-level client representing Amazon Simple Storage Service (S3), by default None.
+
+    """
+    # Get the service client.
+    if s3_client is None:
+        s3_client = boto3.client("s3")
+
+    try:
+        response = s3_client.head_bucket(Bucket=bucket_name)  # noqa E501
+    except ClientError as error:
+        error_code = int(error.response["Error"]["Code"])
+
+        if error_code == 403:
+            raise PermissionError(f"{bucket_name} is a private Bucket. Forbidden Access!")
+        elif error_code == 404:
+            raise FileNotFoundError(f"Bucket {bucket_name} Does Not Exist!")
+    except Exception as error:
+        _log.exception(error)
+        raise error
