@@ -4,6 +4,7 @@ import logging
 import os
 import urllib
 from pathlib import Path
+
 import boto3
 import datacube
 import dateutil
@@ -18,9 +19,9 @@ from tqdm.auto import tqdm
 
 from deafrica_waterbodies.waterbodies.timeseries.id_field import guess_id_field
 from deafrica_waterbodies.waterbodies.timeseries.io import (
-    check_if_s3_uri,
     check_dir_exists,
     check_file_exists,
+    check_if_s3_uri,
 )
 
 _log = logging.getLogger(__name__)
@@ -172,6 +173,7 @@ def generate_timeseries_from_wofs_ls(
     # We will be using wofs_ls data.
     output_crs = "EPSG:6933"
     resolution = (-30, 30)
+    # dask_chunks = {"x": 3200, "y": 3200, "time": 1} # TODO: Check if using dask speeds up runtime.
 
     # Load the waterbody polygons.
     try:
