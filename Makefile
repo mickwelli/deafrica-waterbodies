@@ -30,6 +30,7 @@ metadata: ## 3. Add metadata types.
 
 products: ## 3. Add the wofs_ls product definition for testing.
 	docker compose exec -T index datacube -v product add https://raw.githubusercontent.com/digitalearthafrica/config/master/products/wofs_ls_summary_alltime.odc-product.yaml
+	docker compose exec -T index datacube -v product add https://raw.githubusercontent.com/digitalearthafrica/config/master/products/wofs_ls.odc-product.yaml
 
 index: ## 4. Index the test data.
 	cat index_tiles.sh | docker compose exec -T index bash
