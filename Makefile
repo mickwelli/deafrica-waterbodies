@@ -18,11 +18,11 @@ build: ## 0. Build the base image
 up: ## 1. Bring up your Docker environment.
 	docker compose up -d 
 ##	docker compose up -d postgres
-##	docker compose up -d conflux
+##	docker compose up -d waterbodies
 ##	docker compose up -d index
 
 init: ## 2. Prepare the database, initialise the database schema.
-	docker compose exec -T index datacube -v system init --no-default-types --no-init-users
+	docker compose exec -T waterbodies datacube -v system init --no-default-types --no-init-users
 
 metadata: ## 3. Add metadata types.
 	docker compose exec -T index datacube -v metadata add https://raw.githubusercontent.com/digitalearthafrica/config/master/metadata/eo3_deafrica.odc-type.yaml
