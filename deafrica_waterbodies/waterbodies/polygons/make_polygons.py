@@ -280,6 +280,7 @@ def get_polygons_using_thresholds(
     buffered_30m_datasets_extents = datasets_extents.boundary.buffer(
         30, cap_style="flat", join_style="mitre"
     )
+    buffered_30m_datasets_extents_gdf = gpd.GeoDataFrame(geometry=buffered_30m_datasets_extents, crs=output_crs)
 
     # Generate the waterbody polygons.
     primary_threshold_polygons_list = []
@@ -357,12 +358,12 @@ def get_polygons_using_thresholds(
     secondary_threshold_polygons = pd.concat(secondary_threshold_polygons_list)
 
     # Merge water body polygons at dataset/scene boundaries.
-    _log.info("Merging polygons at tile boundaries...")
+    _log.info("Merging polygons at dataset/scene boundaries...")
     primary_threshold_polygons = merge_polygons_at_dataset_boundary(
-        primary_threshold_polygons, buffered_30m_datasets_extents
+        primary_threshold_polygons, buffered_30m_datasets_extents_gdf
     )
     secondary_threshold_polygons = merge_polygons_at_dataset_boundary(
-        secondary_threshold_polygons, buffered_30m_datasets_extents
+        secondary_threshold_polygons, buffered_30m_datasets_extents_gdf
     )
 
     return primary_threshold_polygons, secondary_threshold_polygons
