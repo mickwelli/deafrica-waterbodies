@@ -166,9 +166,9 @@ def get_datasets_ids(
     return filtered_datasets_ids
 
 
-def merge_polygons_at_dataset_boundary(waterbody_polygons: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+def merge_polygons_at_dataset_boundaries(waterbody_polygons: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
-    Function to merge waterbody polygons located at scene/dataset boundaries.
+    Function to merge waterbody polygons located at WOfS All Time Summary scene/dataset boundaries.
 
     Parameters
     ----------
@@ -178,7 +178,7 @@ def merge_polygons_at_dataset_boundary(waterbody_polygons: gpd.GeoDataFrame) -> 
     Returns
     -------
     gpd.GeoDataFrame
-        Waterbody polygons with polygons located at dataset boundaries merged.
+        Waterbody polygons with polygons located at WOfS All Time Summary scene/dataset boundaries merged.
     """
     # Get the dataset extents/regions for the WOfS All Time Summary product.
     ds_extents = gpd.read_file(
