@@ -23,10 +23,7 @@ from datacube.utils.geometry import Geometry
 from deafrica_tools.spatial import xr_vectorize
 
 from deafrica_waterbodies.attributes import assign_unique_ids
-from deafrica_waterbodies.filters import (
-    filter_geodataframe_by_intersection,
-    filter_waterbodies,
-)
+from deafrica_waterbodies.filters import filter_geodataframe_by_intersection, filter_waterbodies
 
 _log = logging.getLogger(__name__)
 
@@ -131,7 +128,7 @@ def filter_datasets(
     # Remove empty strings.
     filtered_datasets_ids = [item for item in filtered_datasets_ids_ if item]
 
-    return filtered_datasets_ids    
+    return filtered_datasets_ids
 
 
 def get_datasets_ids(
@@ -169,29 +166,36 @@ def get_datasets_ids(
     return filtered_datasets_ids
 
 
-def merge_polygons_at_dataset_boundary(
-    input_polygons: gpd.GeoDataFrame, buffered_30m_ds_extents: gpd.GeoDataFrame
-) -> gpd.GeoDataFrame:
+def merge_polygons_at_dataset_boundary(waterbody_polygons: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
     Function to merge waterbody polygons located at scene/dataset boundaries.
 
     Parameters
     ----------
-    input_polygons : gpd.GeoDataFrame
+    waterbody_polygons : gpd.GeoDataFrame
         The waterbody polygons.
-    buffered_30m_ds_extents : gpd.GeoDataFrame
-        The buffered (by 30m) extents of the datasets used to generate the water body polygons.
 
     Returns
     -------
     gpd.GeoDataFrame
         Waterbody polygons with polygons located at dataset boundaries merged.
     """
-    assert input_polygons.crs == buffered_30m_ds_extents.crs
-    
+    # Get the dataset extents/regions for the WOfS All Time Summary product.
+    ds_extents = gpd.read_file(
+        "https://explorer.digitalearth.africa/api/regions/wofs_ls_summary_alltime"
+    ).to_crs(waterbody_polygons.crs)
+
+    # Add a 1 pixel (30 m) buffer to the dataset extents.
+    buffered_30m_ds_extents_geom = ds_extents.boundary.buffer(
+        30, cap_style="flat", join_style="mitre"
+    )
+    buffered_30m_ds_extents = gpd.GeoDataFrame(
+        geometry=buffered_30m_ds_extents_geom, crs=waterbody_polygons.crs
+    )
+
     # Get the polygons at the dataset boundaries.
     boundary_polygons, _, not_boundary_polygons = filter_geodataframe_by_intersection(
-        input_polygons, buffered_30m_ds_extents, invert_mask=False, return_inverse=True
+        waterbody_polygons, buffered_30m_ds_extents, invert_mask=False, return_inverse=True
     )
 
     # Now combine overlapping polygons in boundary_polygons.
@@ -199,7 +203,7 @@ def merge_polygons_at_dataset_boundary(
 
     # `Explode` the multipolygon back out into individual polygons.
     merged_boundary_polygons = gpd.GeoDataFrame(
-        crs=input_polygons.crs, geometry=[merged_boundary_polygons_geoms]
+        crs=waterbody_polygons.crs, geometry=[merged_boundary_polygons_geoms]
     )
     merged_boundary_polygons = merged_boundary_polygons.explode(index_parts=True).reset_index(
         drop=True
@@ -285,9 +289,7 @@ def get_polygons_using_thresholds(
         # count_wet measurements.
         # Note: it seems some pixels with NaN values in the frequency measurement
         # have a value of zero in the count_clear and/or the count_wet measurements.
-        wofs_alltime_summary = wofs_alltime_summary.where(
-            ~np.isnan(wofs_alltime_summary.frequency)
-        )
+        wofs_alltime_summary = wofs_alltime_summary.where(~np.isnan(wofs_alltime_summary.frequency))
 
         # Mask pixels not observed at least min_valid_observations times.
         wofs_alltime_summary_valid_clear_count = (
@@ -331,8 +333,10 @@ def get_polygons_using_thresholds(
             generated_polygons[threshold] = merged_polygons
 
     except Exception as error:
-        _log.exception(f"\nDataset {str(dataset_id)} did not run. \n"
-                       "This is probably because there are no waterbodies present in this scene.")
+        _log.exception(
+            f"\nDataset {str(dataset_id)} did not run. \n"
+            "This is probably because there are no waterbodies present in this scene."
+        )
         _log.exception(error)
 
     primary_threshold_polygons = generated_polygons[primary_threshold]
