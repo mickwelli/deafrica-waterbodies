@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import shutil
 import urllib
 import uuid
@@ -12,6 +13,9 @@ from botocore.client import ClientError
 from mypy_boto3_s3 import S3Client
 
 _log = logging.getLogger(__name__)
+
+# File extensions to recognise as Parquet files.
+PARQUET_EXTENSIONS = {".pq", ".parquet"}
 
 
 def check_if_s3_uri(file_path: str | Path) -> bool:
@@ -288,3 +292,50 @@ def write_waterbodies_to_file(
         except Exception as error:
             _log.error(error)
             raise error
+
+
+def find_parquet_files(path: str | Path, pattern: str = ".*") -> [str]:
+    """
+    Find Parquet files matching a pattern.
+
+    Arguments
+    ---------
+    path : str | Path
+        Path (s3 or local) to search for Parquet files.
+
+    pattern : str
+        Regex to match file names against.
+
+    Returns
+    -------
+    [str]
+        List of paths.
+    """
+    pattern = re.compile(pattern)
+
+    # "Support" pathlib Paths.
+    path = str(path)
+
+    if check_if_s3_uri(path):
+        file_system = fsspec.filesystem("s3")
+    else:
+        file_system = fsspec.filesystem("file")
+
+    pq_file_paths = []
+
+    files = file_system.find(path)
+    for file in files:
+        _, file_extension = os.path.splitext(file)
+        if file_extension not in PARQUET_EXTENSIONS:
+            continue
+        else:
+            _, file_name = os.path.split(file)
+            if not pattern.match(file_name):
+                continue
+            else:
+                pq_file_paths.append(file)
+
+    if check_if_s3_uri(path):
+        pq_file_paths = [f"s3://{file}" for file in pq_file_paths]
+
+    return pq_file_paths
