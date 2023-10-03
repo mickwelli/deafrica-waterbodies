@@ -1,5 +1,4 @@
 import logging
-import os
 
 import click
 import fsspec
@@ -22,15 +21,15 @@ from deafrica_waterbodies.cli.logs import logging_setup
     "--num-workers", type=int, help="Number of worker processes to use when filtering datasets."
 )
 @click.option(
-    "--output-directory",
+    "--dataset-ids-text-file",
     type=click.Path(),
-    help="Directory to write the dataset ids text file to.",
+    help="File URI or S3 URI of the text file to write the dataset ids to.",
 )
 def get_dataset_ids(
     verbose,
     aoi_vector_file,
     num_workers,
-    output_directory,
+    dataset_ids_text_file,
 ):
     """
     Get the dataset ids of the WOfS All Time summary datasets/scenes to generate
@@ -42,7 +41,7 @@ def get_dataset_ids(
 
     # Support pathlib Paths.
     aoi_vector_file = str(aoi_vector_file)
-    output_directory = str(output_directory)
+    dataset_ids_text_file = str(dataset_ids_text_file)
 
     # Load the area of interest as a GeoDataFrame.
     if aoi_vector_file is not None:
@@ -61,21 +60,14 @@ def get_dataset_ids(
     )
 
     # Instanstiate the filesystem to use.
-    if deafrica_waterbodies.io.check_if_s3_uri(output_directory):
+    if deafrica_waterbodies.io.check_if_s3_uri(dataset_ids_text_file):
         fs = fsspec.filesystem("s3")
     else:
         fs = fsspec.filesystem("file")
 
-    # Check if the output directory exists. If it does not, create it.
-    if not deafrica_waterbodies.io.check_dir_exists(output_directory):
-        fs.mkdirs(output_directory, exist_ok=True)
-        _log.info(f"Created directory {output_directory}")
-
-    # Write the dataset ids to a text file.
-    output_file_path = os.path.join(output_directory, "dataset_ids.txt")
-
-    with fs.open(output_file_path, "w") as file:
+    # Write the dataset ids to the text file.
+    with fs.open(dataset_ids_text_file, "w") as file:
         for dataset_id in dataset_ids:
             file.write(f"{dataset_id}\n")
 
-    _log.info(f"Dataset IDs written to: {output_file_path}.")
+    _log.info(f"Dataset IDs written to: {dataset_ids_text_file}.")
