@@ -5,9 +5,9 @@ import click
 import fsspec
 import geopandas as gpd
 
-from deafrica_waterbodies.cli.logs import logging_setup
 import deafrica_waterbodies.io
 import deafrica_waterbodies.make_polygons
+from deafrica_waterbodies.cli.logs import logging_setup
 
 
 @click.command("get-dataset-ids", no_args_is_help=True)
@@ -52,7 +52,9 @@ def get_dataset_ids(
 
     # Get the WOfS All Time Summary scene ids for the scenes whose extent
     # intersects with the area of interest.
-    dataset_ids = deafrica_waterbodies.make_polygons.get_datasets_ids(aoi_gdf=aoi_gdf, num_workers=num_workers)
+    dataset_ids = deafrica_waterbodies.make_polygons.get_datasets_ids(
+        aoi_gdf=aoi_gdf, num_workers=num_workers
+    )
 
     # Instanstiate the filesystem to use.
     if deafrica_waterbodies.io.check_if_s3_uri(output_directory):
