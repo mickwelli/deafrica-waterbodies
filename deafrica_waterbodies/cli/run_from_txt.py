@@ -111,20 +111,6 @@ def run_from_txt(
     # For each dataset id, threshold the scene to generate the primary and secondary threshold
     # waterbody polygons.
     for dataset_id in dataset_ids:
-        (
-            primary_threshold_polygons,
-            secondary_threshold_polygons,
-        ) = deafrica_waterbodies.make_polygons.get_polygons_using_thresholds(
-            dataset_id=dataset_id,
-            dask_chunks=dask_chunks,
-            resolution=resolution,
-            output_crs=output_crs,
-            min_valid_observations=minimum_valid_observations,
-            primary_threshold=primary_threshold,
-            secondary_threshold=secondary_threshold,
-            dc=dc,
-        )
-        # Write the polygons to parquet.
         primary_threshold_polygons_fp = os.path.join(
             polygons_from_thresholds_dir, f"{dataset_id}_primary_threshold_polygons.parquet"
         )
@@ -132,5 +118,28 @@ def run_from_txt(
             polygons_from_thresholds_dir, f"{dataset_id}_secondary_threshold_polygons.parquet"
         )
 
-        primary_threshold_polygons.to_parquet(primary_threshold_polygons_fp)
-        secondary_threshold_polygons.to_parquet(secondary_threshold_polygons_fp)
+        if not overwrite:
+            _log.info(
+                f"Checking existence of {primary_threshold_polygons_fp} and {secondary_threshold_polygons_fp}"
+            )
+            exists = deafrica_waterbodies.io.check_file_exists(
+                primary_threshold_polygons_fp
+            ) and deafrica_waterbodies.io.check_file_exists(secondary_threshold_polygons_fp)
+
+        if overwrite or not exists:
+            (
+                primary_threshold_polygons,
+                secondary_threshold_polygons,
+            ) = deafrica_waterbodies.make_polygons.get_polygons_using_thresholds(
+                dataset_id=dataset_id,
+                dask_chunks=dask_chunks,
+                resolution=resolution,
+                output_crs=output_crs,
+                min_valid_observations=minimum_valid_observations,
+                primary_threshold=primary_threshold,
+                secondary_threshold=secondary_threshold,
+                dc=dc,
+            )
+            # Write the polygons to parquet files.
+            primary_threshold_polygons.to_parquet(primary_threshold_polygons_fp)
+            secondary_threshold_polygons.to_parquet(secondary_threshold_polygons_fp)
