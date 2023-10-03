@@ -188,7 +188,7 @@ def merge_polygons_at_dataset_boundary(
         Waterbody polygons with polygons located at dataset boundaries merged.
     """
     assert input_polygons.crs == buffered_30m_ds_extents.crs
-
+    
     # Get the polygons at the dataset boundaries.
     boundary_polygons, _, not_boundary_polygons = filter_geodataframe_by_intersection(
         input_polygons, buffered_30m_ds_extents, invert_mask=False, return_inverse=True

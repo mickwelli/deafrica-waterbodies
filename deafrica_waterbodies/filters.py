@@ -237,6 +237,30 @@ def split_large_polygons(
     return large_polygons_handled
 
 
+def filter_by_area(
+    input_polygons: gpd.GeoDataFrame,
+    min_polygon_size: float = 4500,
+    max_polygon_size: float = math.inf,
+):
+    before_filter_by_area = len(input_polygons)
+
+    _log.info(
+        f"Filtering the waterbody polygons using the minimum area {min_polygon_size} and the maximum area {max_polygon_size}."
+    )
+
+    input_polygons["area"] = input_polygons.area
+
+    area_filtered_polygons = input_polygons.loc[
+        ((input_polygons["area"] > min_polygon_size) & (input_polygons["area"] <= max_polygon_size))
+    ]
+
+    after_filter_by_area = len(area_filtered_polygons)
+
+    _log.info(f"Filtered out {after_filter_by_area}  from {before_filter_by_area} by area.")
+
+    return area_filtered_polygons
+
+
 def filter_waterbodies(
     primary_threshold_polygons,
     secondary_threshold_polygons,
@@ -292,21 +316,7 @@ def filter_waterbodies(
 
     crs = primary_threshold_polygons.crs
 
-    _log.info(
-        f"Filtering the waterbody polygons using the minimum area {min_polygon_size} and the maximum area {max_polygon_size}."
-    )
-    primary_threshold_polygons["area"] = primary_threshold_polygons.area
-    secondary_threshold_polygons["area"] = secondary_threshold_polygons.area
-
-    area_filtered_primary = primary_threshold_polygons.loc[
-        (
-            (primary_threshold_polygons["area"] > min_polygon_size)
-            & (primary_threshold_polygons["area"] <= max_polygon_size)
-        )
-    ]
-    area_filtered_secondary = secondary_threshold_polygons.loc[
-        (secondary_threshold_polygons["area"] <= max_polygon_size)
-    ]
+    # Filter out polygons using the minimum and maximum area.
 
     # Filter out polygons that intersect with the ocean.
     if filter_out_ocean_polygons:
