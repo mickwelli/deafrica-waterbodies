@@ -32,6 +32,10 @@ def get_dataset_ids(
     num_workers,
     output_directory,
 ):
+    """
+    Get the dataset ids of the WOfS All Time summary datasets/scenes to generate
+    the waterbody polygons for.
+    """
     # Set up logger.
     logging_setup(verbose=verbose)
     _log = logging.getLogger(__name__)
