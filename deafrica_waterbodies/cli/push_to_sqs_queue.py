@@ -1,5 +1,6 @@
 import logging
 import os
+
 import boto3
 import click
 
@@ -14,7 +15,9 @@ from deafrica_waterbodies.cli.logs import logging_setup
     required=True,
     help="Directory containing the dataset ids text file.",
 )
-@click.option("--dataset-ids-queue", required=True, help="Name of the queue to push the dataset ids to.")
+@click.option(
+    "--dataset-ids-queue", required=True, help="Name of the queue to push the dataset ids to."
+)
 @click.option(
     "--max-retries",
     default=10,
