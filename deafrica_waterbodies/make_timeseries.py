@@ -17,8 +17,8 @@ from deafrica_tools.spatial import xr_rasterize
 from mypy_boto3_s3.client import S3Client
 from tqdm.auto import tqdm
 
-from deafrica_waterbodies.waterbodies.timeseries.id_field import guess_id_field
-from deafrica_waterbodies.waterbodies.timeseries.io import (
+from deafrica_waterbodies.id_field import guess_id_field
+from deafrica_waterbodies.io import (
     check_dir_exists,
     check_file_exists,
     check_if_s3_uri,

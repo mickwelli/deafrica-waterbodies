@@ -22,8 +22,8 @@ import tqdm
 from datacube.utils.geometry import Geometry
 from deafrica_tools.spatial import xr_vectorize
 
-from deafrica_waterbodies.waterbodies.polygons.attributes import assign_unique_ids
-from deafrica_waterbodies.waterbodies.polygons.filters import (
+from deafrica_waterbodies.attributes import assign_unique_ids
+from deafrica_waterbodies.filters import (
     filter_geodataframe_by_intersection,
     filter_waterbodies,
 )
