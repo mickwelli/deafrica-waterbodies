@@ -8,6 +8,7 @@ import warnings
 import geopandas as gpd
 import numpy as np
 import pandas as pd
+from deafrica_tools.coastal import get_coastlines
 
 _log = logging.getLogger(__name__)
 
@@ -242,6 +243,23 @@ def filter_by_area(
     min_polygon_size: float = 4500,
     max_polygon_size: float = math.inf,
 ):
+    """
+    Filter waterbody polygons by minimum and maximum area.
+
+    Parameters
+    ----------
+    input_polygons : gpd.GeoDataFrame
+        Water body polygons to be filtered.
+    min_polygon_size : float, optional
+        Minimum area of a waterbody polygon to be included in the output polygons, by default 4500
+    max_polygon_size : float, optional
+        Maximum area of a waterbody polygon to be included in the output polygons, by default math.inf
+
+    Returns
+    -------
+    gpd.GeoDataFrame
+        Water body polygons filtered by minimum and maximum area.
+    """
     before_filter_by_area = len(input_polygons)
 
     _log.info(
@@ -256,21 +274,66 @@ def filter_by_area(
 
     after_filter_by_area = len(area_filtered_polygons)
 
-    _log.info(f"Filtered out {after_filter_by_area}  from {before_filter_by_area} by area.")
+    _log.info(f"Filtered out {after_filter_by_area} from {before_filter_by_area} by area.")
 
     return area_filtered_polygons
 
 
+def filter_out_ocean_polygons(input_polygons: gpd.GeoDataFrame):
+    # Load the DE Africa Coastlines layer.
+    bbox = tuple(input_polygons.to_crs("EPSG:4326").total_bounds)
+    bbox_crs = "EPSG:4326"
+
+    coastlines = get_coastlines(bbox=bbox, crs=bbox_crs, layer="shorelines", drop_wms=True).to_crs(
+        input_polygons.crs
+    )
+
+    # Select the 2021 coastline.
+    coastlines = coastlines[coastlines["year"] == "2021"]
+
+    # Filtered out any ocean polygons using the coastlines.
+    inland_polygons, intersect_indices = filter_geodataframe_by_intersection(
+        input_polygons, coastlines, invert_mask=True
+    )
+
+    return inland_polygons
+
+
+def merge_primary_and_secondary_threshold_polygons(
+    primary_threshold_polygons: gpd.GeoDataFrame,
+    secondary_threshold_polygons: gpd.GeoDataFrame,
+) -> gpd.GeoDataFrame:
+    assert primary_threshold_polygons.crs == secondary_threshold_polygons.crs
+    # Find the polygons identified using the secondary threshold that intersect with those identified
+    # using the primary threshold.
+    _, intersect_indices = filter_geodataframe_by_intersection(
+        secondary_threshold_polygons, primary_threshold_polygons
+    )
+    do_intersect_with_primary = secondary_threshold_polygons.loc[
+        secondary_threshold_polygons.index.isin(intersect_indices)
+    ]
+
+    # Combine the identified polygons  with the primary threshold polygons.
+    combined_polygons = gpd.GeoDataFrame(
+        pd.concat([do_intersect_with_primary, primary_threshold_polygons], ignore_index=True)
+    )
+    # Merge overlapping polygons.
+    merged_combined_polygons_geoms = combined_polygons.unary_union
+    # `Explode` the multipolygon back out into individual polygons.
+    merged_combined_polygons = gpd.GeoDataFrame(
+        crs=secondary_threshold_polygons.crs, geometry=[merged_combined_polygons_geoms]
+    )
+    merged_combined_polygons = merged_combined_polygons.explode(index_parts=True)
+    return merged_combined_polygons
+
+
 def filter_waterbodies(
-    primary_threshold_polygons,
-    secondary_threshold_polygons,
+    primary_threshold_polygons: gpd.GeoDataFrame,
+    secondary_threshold_polygons: gpd.GeoDataFrame,
     min_polygon_size: float = 4500,
     max_polygon_size: float = math.inf,
-    filter_out_ocean_polygons: bool = False,
     land_sea_mask_fp: str | None = None,
-    filter_out_major_rivers_polygons: bool = False,
     major_rivers_mask_fp: str | None = None,
-    filter_out_urban_polygons: bool = False,
     urban_mask_fp: str | None = None,
     handle_large_polygons: str = "nothing",
     pp_test_threshold: float = 0.005,
@@ -280,24 +343,18 @@ def filter_waterbodies(
 
     Parameters
     ----------
-    primary_threshold : float, optional
-        Threshold to use to determine the location of the waterbody polygons, by default 0.1
-    secondary_threshold : float, optional
-        Threshold to use to determine the extent / shape of the waterbodies polygons, by default 0.05
+    primary_threshold_polygons : gpd.GeoDataFrame, optional
+        Waterbody polygons generated using the primary threshold.
+    secondary_threshold_polygons : gpd.GeoDataFrame, optional
+        Waterbody polygons generated using the secondary threshold.
     min_polygon_size : float, optional
         Minimum area of a waterbody polygon to be included in the output polygons, by default 4500
     max_polygon_size : float, optional
         Maximum area of a waterbody polygon to be included in the output polygons, by default math.inf
-    filter_out_ocean_polygons : bool, optional
-        If True, filter out ocean waterbody polygons using the polygons from `land_sea_mask_fp`, by default False
     land_sea_mask_fp : str | None, optional
         Vector file path to the polygons to use to filter out ocean waterbody polygons, by default None
-    filter_out_major_rivers_polygons : bool, optional
-        If True filter out major rivers from the water body polygons, by default False
     major_rivers_mask_fp : str | None, optional
         Vector file path to the polygons to use to filter out major river waterbody polygons, by default None
-    filter_out_urban_polygons : bool, optional
-        If True filter out CBDs from the waterbody polygons, by default False
     urban_mask_fp : str | None, optional
         Vector file path to the polygons to use to filter out CBDs, by default None
     handle_large_polygons : str, optional
@@ -310,118 +367,55 @@ def filter_waterbodies(
     gpd.GeoDataFrame
         Filtered set of waterbody polygons.
     """
-
     # Assert both polygons have the same crs
     assert primary_threshold_polygons.crs == secondary_threshold_polygons.crs
 
     crs = primary_threshold_polygons.crs
 
     # Filter out polygons using the minimum and maximum area.
-
-    # Filter out polygons that intersect with the ocean.
-    if filter_out_ocean_polygons:
-        _log.info("Filtering out ocean waterbody polygons")
-        if land_sea_mask_fp is None:
-            _log.error("No vector file path provided for land and sea mask.")
-            error_msg = (
-                "Please provide a file path to the dataset you wish to use "
-                "to filter out ocean polygons. The dataset needs to be a vector dataset, "
-                "and able to be read in by the fiona python library. "
-            )
-            raise ValueError(error_msg)
-        else:
-            try:
-                land_sea_mask = gpd.read_file(land_sea_mask_fp).to_crs(crs)
-            except Exception as error:
-                _log.exception(f"Could not read file {land_sea_mask_fp}")
-                raise error
-            ocean_filtered_primary, _ = filter_geodataframe_by_intersection(
-                area_filtered_primary, land_sea_mask, invert_mask=True
-            )
-            ocean_filtered_secondary, _ = filter_geodataframe_by_intersection(
-                area_filtered_secondary, land_sea_mask, invert_mask=True
-            )
-    else:
-        ocean_filtered_primary = area_filtered_primary
-        ocean_filtered_secondary = area_filtered_secondary
+    area_filtered_primary = filter_by_area(
+        input_polygons=primary_threshold_polygons,
+        min_polygon_size=min_polygon_size,
+        max_polygon_size=max_polygon_size,
+    )
+    area_filtered_secondary = filter_by_area(
+        input_polygons=secondary_threshold_polygons,
+        min_polygon_size=0,
+        max_polygon_size=max_polygon_size,
+    )
 
     # Filter out CBD areas.
-    if filter_out_urban_polygons:
+    if urban_mask_fp is not None:
         _log.info("Filtering out urban/CBD areas from waterbody polygons")
-        if urban_mask_fp is None:
-            _log.error("No vector file path provided for urban mask.")
-            error_msg = (
-                "Please provide a file path to the dataset you wish to use "
-                "to filter out urban/CBD area polygons. The dataset needs to be a vector dataset, "
-                "and able to be read in by the fiona python library. "
-            )
-            raise ValueError(error_msg)
-        else:
-            try:
-                urban_mask = gpd.read_file(urban_mask_fp).to_crs(crs)
-            except Exception as error:
-                _log.exception(f"Could not read file {urban_mask_fp}")
-                raise error
-            cbd_filtered_primary = filter_geodataframe_by_intersection(
-                ocean_filtered_primary, urban_mask
-            )
-            cbd_filtered_secondary = ocean_filtered_secondary
+        try:
+            urban_mask = gpd.read_file(urban_mask_fp).to_crs(crs)
+        except Exception as error:
+            _log.exception(f"Could not read file {urban_mask_fp}")
+            raise error
+        cbd_filtered_primary = filter_geodataframe_by_intersection(
+            area_filtered_primary, urban_mask
+        )
+        cbd_filtered_secondary = area_filtered_secondary
     else:
         info_msg = (
             "You have chosen not to filter out waterbodies within CBDs. If you meant to use this option, please "
             "set `filter_out_urban_areas = True`, and set the path to your urban filter shapefile in `urban_mask_fp`."
         )
         _log.info(info_msg)
-        cbd_filtered_primary = ocean_filtered_primary
-        cbd_filtered_secondary = ocean_filtered_secondary
-
-    # Find the polygons identified using the secondary threshold that intersect with those identified
-    # using the primary threshold.
-    _log.info(
-        "Finding polygons identified using the secondary threshold that intersect with those identified using the primary threshold."
-    )
-
-    _, intersect_indices = filter_geodataframe_by_intersection(
-        cbd_filtered_secondary, cbd_filtered_primary
-    )
-
-    do_intersect_with_primary = cbd_filtered_secondary.loc[
-        cbd_filtered_secondary.index.isin(intersect_indices)
-    ]
-
-    # Concat the two polygon datasets together.
-    combined_polygons = gpd.GeoDataFrame(
-        pd.concat([do_intersect_with_primary, cbd_filtered_primary], ignore_index=True)
-    )
-    # Merge overlapping polygons.
-    merged_combined_polygons_geoms = combined_polygons.unary_union
-
-    # `Explode` the multipolygons back out into individual polygons.
-    merged_combined_polygons = gpd.GeoDataFrame(crs=crs, geometry=[merged_combined_polygons_geoms])
-    merged_combined_polygons = merged_combined_polygons.explode(index_parts=True).reset_index(
-        drop=True
-    )
+        cbd_filtered_primary = area_filtered_primary
+        cbd_filtered_secondary = area_filtered_secondary
 
     # Filter out polygons that intersect with major rivers.
-    if filter_out_major_rivers_polygons:
+    if major_rivers_mask_fp is not None:
         _log.info("Filtering out major rivers from the waterbodies.")
-        if major_rivers_mask_fp is None:
-            _log.error("No vector file path provided for major rivers mask.")
-            error_msg = (
-                "Please provide a file path to the dataset you wish to use "
-                "to filter out major rivers. The dataset needs to be a vector dataset, "
-                "and able to be read in by the fiona python library. "
-            )
-            raise ValueError(error_msg)
-        else:
-            try:
-                major_rivers = gpd.read_file(major_rivers_mask_fp).to_crs(crs)
-            except Exception as error:
-                _log.exception(f"Could not read file {major_rivers_mask_fp}")
-                raise error
-            major_rivers_filtered, _ = filter_geodataframe_by_intersection(
-                merged_combined_polygons, major_rivers
-            )
+        try:
+            major_rivers = gpd.read_file(major_rivers_mask_fp).to_crs(crs)
+        except Exception as error:
+            _log.exception(f"Could not read file {major_rivers_mask_fp}")
+            raise error
+        major_rivers_filtered, _ = filter_geodataframe_by_intersection(
+            merged_combined_polygons, major_rivers
+        )
     else:
         info_msg = (
             "You have chosen not to filter out major rivers from the waterbodies. If you meant to use this option, please "
