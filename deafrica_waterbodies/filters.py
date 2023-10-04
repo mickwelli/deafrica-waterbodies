@@ -238,67 +238,6 @@ def split_large_polygons(
     return large_polygons_handled
 
 
-def filter_by_area(
-    input_polygons: gpd.GeoDataFrame,
-    min_polygon_size: float = 4500,
-    max_polygon_size: float = math.inf,
-):
-    """
-    Filter waterbody polygons by minimum and maximum area.
-
-    Parameters
-    ----------
-    input_polygons : gpd.GeoDataFrame
-        Water body polygons to be filtered.
-    min_polygon_size : float, optional
-        Minimum area of a waterbody polygon to be included in the output polygons, by default 4500
-    max_polygon_size : float, optional
-        Maximum area of a waterbody polygon to be included in the output polygons, by default math.inf
-
-    Returns
-    -------
-    gpd.GeoDataFrame
-        Water body polygons filtered by minimum and maximum area.
-    """
-    before_filter_by_area = len(input_polygons)
-
-    _log.info(
-        f"Filtering the waterbody polygons using the minimum area {min_polygon_size} and the maximum area {max_polygon_size}."
-    )
-
-    input_polygons["area"] = input_polygons.area
-
-    area_filtered_polygons = input_polygons.loc[
-        ((input_polygons["area"] > min_polygon_size) & (input_polygons["area"] <= max_polygon_size))
-    ]
-
-    after_filter_by_area = len(area_filtered_polygons)
-
-    _log.info(f"Filtered out {after_filter_by_area} from {before_filter_by_area} by area.")
-
-    return area_filtered_polygons
-
-
-def filter_out_ocean_polygons(input_polygons: gpd.GeoDataFrame):
-    # Load the DE Africa Coastlines layer.
-    bbox = tuple(input_polygons.to_crs("EPSG:4326").total_bounds)
-    bbox_crs = "EPSG:4326"
-
-    coastlines = get_coastlines(bbox=bbox, crs=bbox_crs, layer="shorelines", drop_wms=True).to_crs(
-        input_polygons.crs
-    )
-
-    # Select the 2021 coastline.
-    coastlines = coastlines[coastlines["year"] == "2021"]
-
-    # Filtered out any ocean polygons using the coastlines.
-    inland_polygons, intersect_indices = filter_geodataframe_by_intersection(
-        input_polygons, coastlines, invert_mask=True
-    )
-
-    return inland_polygons
-
-
 def merge_primary_and_secondary_threshold_polygons(
     primary_threshold_polygons: gpd.GeoDataFrame,
     secondary_threshold_polygons: gpd.GeoDataFrame,
@@ -311,7 +250,7 @@ def merge_primary_and_secondary_threshold_polygons(
     )
     do_intersect_with_primary = secondary_threshold_polygons.loc[
         secondary_threshold_polygons.index.isin(intersect_indices)
-    ]
+    ]       
 
     # Combine the identified polygons  with the primary threshold polygons.
     combined_polygons = gpd.GeoDataFrame(
