@@ -268,6 +268,7 @@ def merge_primary_and_secondary_threshold_polygons(
     assert primary_threshold_polygons.crs == secondary_threshold_polygons.crs
     crs = primary_threshold_polygons.crs
 
+    _log.info("Merging the primary threshold and secondary threshold polygons...")
     # Find the polygons identified using the secondary threshold that intersect with those identified
     # using the primary threshold.
     _, intersect_indices = filter_geodataframe_by_intersection(
@@ -286,6 +287,8 @@ def merge_primary_and_secondary_threshold_polygons(
     # `Explode` the multipolygon back out into individual polygons.
     merged_combined_polygons = gpd.GeoDataFrame(crs=crs, geometry=[merged_combined_polygons_geoms])
     merged_combined_polygons = merged_combined_polygons.explode(index_parts=True)
+
+    _log.info(f"Waterbody polygons count after merge: {len(merged_combined_polygons)}.")
     return merged_combined_polygons
 
 
