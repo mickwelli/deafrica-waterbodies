@@ -247,6 +247,48 @@ def filter_using_urban_mask(
         return primary_threshold_polygons
 
 
+def merge_primary_and_secondary_threshold_polygons(
+    primary_threshold_polygons: gpd.GeoDataFrame,
+    secondary_threshold_polygons: gpd.GeoDataFrame,
+) -> gpd.GeoDataFrame:
+    """
+    Identify secondary threshold polygons that intersect with the primary threshold
+    polygons and merge them with the primary threshold polygons.
+
+    Parameters
+    ----------
+    primary_threshold_polygons : gpd.GeoDataFrame
+    secondary_threshold_polygons : gpd.GeoDataFrame
+
+    Returns
+    -------
+    gpd.GeoDataFrame
+        Merged primary and secondary threshold polygons.
+    """
+    assert primary_threshold_polygons.crs == secondary_threshold_polygons.crs
+    crs = primary_threshold_polygons.crs
+
+    # Find the polygons identified using the secondary threshold that intersect with those identified
+    # using the primary threshold.
+    _, intersect_indices = filter_geodataframe_by_intersection(
+        secondary_threshold_polygons, primary_threshold_polygons
+    )
+    do_intersect_with_primary = secondary_threshold_polygons.loc[
+        secondary_threshold_polygons.index.isin(intersect_indices)
+    ]
+
+    # Combine the identified polygons  with the primary threshold polygons.
+    combined_polygons = gpd.GeoDataFrame(
+        pd.concat([do_intersect_with_primary, primary_threshold_polygons], ignore_index=True)
+    )
+    # Merge overlapping polygons.
+    merged_combined_polygons_geoms = combined_polygons.unary_union
+    # `Explode` the multipolygon back out into individual polygons.
+    merged_combined_polygons = gpd.GeoDataFrame(crs=crs, geometry=[merged_combined_polygons_geoms])
+    merged_combined_polygons = merged_combined_polygons.explode(index_parts=True)
+    return merged_combined_polygons
+
+
 def pp_test_gdf(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
     Function to calculate the Polsby–Popper test values on a
@@ -395,34 +437,6 @@ def split_large_polygons(
     large_polygons_handled.drop(columns=["area", "perimeter", "pp_test"], inplace=True)
 
     return large_polygons_handled
-
-
-def merge_primary_and_secondary_threshold_polygons(
-    primary_threshold_polygons: gpd.GeoDataFrame,
-    secondary_threshold_polygons: gpd.GeoDataFrame,
-) -> gpd.GeoDataFrame:
-    assert primary_threshold_polygons.crs == secondary_threshold_polygons.crs
-    # Find the polygons identified using the secondary threshold that intersect with those identified
-    # using the primary threshold.
-    _, intersect_indices = filter_geodataframe_by_intersection(
-        secondary_threshold_polygons, primary_threshold_polygons
-    )
-    do_intersect_with_primary = secondary_threshold_polygons.loc[
-        secondary_threshold_polygons.index.isin(intersect_indices)
-    ]
-
-    # Combine the identified polygons  with the primary threshold polygons.
-    combined_polygons = gpd.GeoDataFrame(
-        pd.concat([do_intersect_with_primary, primary_threshold_polygons], ignore_index=True)
-    )
-    # Merge overlapping polygons.
-    merged_combined_polygons_geoms = combined_polygons.unary_union
-    # `Explode` the multipolygon back out into individual polygons.
-    merged_combined_polygons = gpd.GeoDataFrame(
-        crs=secondary_threshold_polygons.crs, geometry=[merged_combined_polygons_geoms]
-    )
-    merged_combined_polygons = merged_combined_polygons.explode(index_parts=True)
-    return merged_combined_polygons
 
 
 def filter_waterbodies(
