@@ -13,51 +13,50 @@ import pandas as pd
 _log = logging.getLogger(__name__)
 
 
-def filter_geodataframe_by_intersection(
-    gpd_data, gpd_filter, filtertype="intersects", invert_mask=True, return_inverse=False
-):
+def filter_by_intersection(
+    gpd_data: gpd.GeoDataFrame,
+    gpd_filter: gpd.GeoDataFrame,
+    filtertype: str = "intersects",
+    invert_mask: bool = True,
+    return_inverse: bool = False,
+) -> gpd.GeoDataFrame:
     """
-    Filter out polygons that intersect with another polygon shapefile.
+    Filter out polygons from `gpd_data` that intersect with polygons in `gpd_filter`.
 
     Parameters
     ----------
-    gpd_data: geopandas GeoDataFrame
-        Polygon data to be filtered.
-    gpd_filter: geopandas GeoDataFrame
-        Polygon dataset to be used as a filter.
-
-    Optional
-    --------
-    filtertype: default = 'intersects'
-        Options = ['intersects', 'contains', 'within']
-    invert_mask: boolean
-        Default = 'True'. This determines whether you want areas that
-        DO ( = 'False') or DON'T ( = 'True') intersect with the filter dataset.
-    return_inverse: boolean
-        Default = 'False'. If True, then return both parts of the intersection:
+    gpd_data : gpd.GeoDataFrame
+        Polygons to be filtered.
+    gpd_filter : gpd.GeoDataFrame
+        Polygons to be used as a filter.
+    filtertype : str, optional
+        Options = ["intersects", "contains", "within"], by default "intersects"
+    invert_mask : bool, optional
+        This determines whether you want polygons that DO ( = False) or
+        DON'T ( = True) intersect with the filter dataset, by default True
+    return_inverse : bool, optional
+        If = True, then return both parts of the intersection:
         - those that intersect AND
-        - those that don't as two GeoDataFrames.
+        - those that don't as two GeoDataFrames, by default False
 
     Returns
     -------
-    gpd_data_filtered: geopandas GeoDataFrame
+    gpd_data_filtered: gpd.GeoDataFrame
         If invert_mask==True, `gpd_data_filtered` is a filtered polygon set,
-        with polygons that DO intersect with gpd_filter removed.
+        with polygons that DO intersect with `gpd_filter` removed.
         If invert_mask==False, `gpd_data_filtered` is a filtered polygon set,
-        with polygons that DON'T intersect with gpd_filter removed.
-    intersect_index: list of indices of gpd_data that intersect with gpd_filter.
+        with polygons that DON'T intersect with `gpd_filter` removed.
 
     Optional
     --------
     if 'return_inverse = True'
     gpd_data_inverse: geopandas GeoDataFrame
         If invert_mask==True, `gpd_data_inverse` is a filtered polygon set,
-        with polygons that DON'T intersect with gpd_filter removed (inverse of gpd_data_filtered).
+        with polygons that DON'T intersect with `gpd_filter` removed (inverse of gpd_data_filtered).
         If invert_mask==False, `gpd_data_inverse` is a filtered polygon set,
-        with polygons that DO intersect with gpd_filter removed (inverse of gpd_data_filtered).
+        with polygons that DO intersect with `gpd_filter` removed (inverse of gpd_data_filtered).
 
     """
-
     # Check that the coordinate reference systems of both GeoDataFrames are the same.
     assert gpd_data.crs == gpd_filter.crs
 
@@ -66,7 +65,7 @@ def filter_geodataframe_by_intersection(
     intersect_index = np.sort(intersections["index_right"].unique())
 
     if invert_mask:
-        # Grab only the polygons that are NOT in the intersect_index.
+        # Grab only the polygons that ARE NOT in the intersect_index.
         gpd_data_filtered = gpd_data.loc[~gpd_data.index.isin(intersect_index)]
     else:
         # Grab only the polygons that ARE in the intersect_index.
@@ -83,9 +82,9 @@ def filter_geodataframe_by_intersection(
             # Grab only the polygons that are NOT in the intersect_index.
             gpd_data_inverse = gpd_data.loc[~gpd_data.index.isin(intersect_index)]
 
-        return gpd_data_filtered, intersect_index, gpd_data_inverse
+        return gpd_data_filtered, gpd_data_inverse
     else:
-        return gpd_data_filtered, intersect_index
+        return gpd_data_filtered
 
 
 def filter_by_area(
@@ -182,15 +181,23 @@ def filter_using_land_sea_mask(
             _log.exception(f"Could not read file {land_sea_mask_fp}")
             raise error
         else:
-            inland_primary_threshold_polygons, _ = filter_geodataframe_by_intersection(
-                primary_threshold_polygons, land_sea_mask, invert_mask=True
+            inland_primary_threshold_polygons = filter_by_intersection(
+                gpd_data=primary_threshold_polygons,
+                gpd_filter=land_sea_mask,
+                filtertype="intersects",
+                invert_mask=True,
+                return_inverse=False,
             )
             _log.info(
                 f"Filtered out {len(primary_threshold_polygons) - len(inland_primary_threshold_polygons)} primary threshold polygons."
             )
 
-            inland_secondary_threshold_polygons, _ = filter_geodataframe_by_intersection(
-                secondary_threshold_polygons, land_sea_mask, invert_mask=True
+            inland_secondary_threshold_polygons = filter_by_intersection(
+                gpd_data=secondary_threshold_polygons,
+                gpd_filter=land_sea_mask,
+                filtertype="intersects",
+                invert_mask=True,
+                return_inverse=False,
             )
             _log.info(
                 f"Filtered out {len(secondary_threshold_polygons) - len(inland_secondary_threshold_polygons)} secondary threshold polygons."
@@ -235,9 +242,14 @@ def filter_using_urban_mask(
             _log.exception(f"Could not read file {urban_mask_fp}")
             raise error
         else:
-            cbd_filtered_primary_threshold_polygons, _ = filter_geodataframe_by_intersection(
-                primary_threshold_polygons, urban_mask
+            cbd_filtered_primary_threshold_polygons = filter_by_intersection(
+                gpd_data=primary_threshold_polygons,
+                gpd_filter=urban_mask,
+                filtertype="intersects",
+                invert_mask=True,
+                return_inverse=False,
             )
+
             _log.info(
                 f"Filtered out {len(primary_threshold_polygons) - len(cbd_filtered_primary_threshold_polygons)} primary threshold polygons."
             )
@@ -271,12 +283,13 @@ def merge_primary_and_secondary_threshold_polygons(
     _log.info("Merging the primary threshold and secondary threshold polygons...")
     # Find the polygons identified using the secondary threshold that intersect with those identified
     # using the primary threshold.
-    _, intersect_indices = filter_geodataframe_by_intersection(
-        secondary_threshold_polygons, primary_threshold_polygons
+    do_intersect_with_primary = filter_by_intersection(
+        gpd_data=secondary_threshold_polygons,
+        gpd_filter=primary_threshold_polygons,
+        filtertype="intersects",
+        invert_mask=False,
+        return_inverse=False,
     )
-    do_intersect_with_primary = secondary_threshold_polygons.loc[
-        secondary_threshold_polygons.index.isin(intersect_indices)
-    ]
 
     # Combine the identified polygons  with the primary threshold polygons.
     combined_polygons = gpd.GeoDataFrame(
@@ -290,6 +303,35 @@ def merge_primary_and_secondary_threshold_polygons(
 
     _log.info(f"Waterbody polygons count after merge: {len(merged_combined_polygons)}.")
     return merged_combined_polygons
+
+
+def filter_using_major_rivers_mask(
+    waterbody_polygons: gpd.GeoDataFrame, major_rivers_mask_fp: str | Path = ""
+) -> gpd.GeoDataFrame:
+    crs = waterbody_polygons.crs
+
+    if major_rivers_mask_fp:
+        _log.info("Filtering out major rivers polygons from the waterbody polygons...")
+        try:
+            major_rivers = gpd.read_file(major_rivers_mask_fp).to_crs(crs)
+        except Exception as error:
+            _log.exception(f"Could not read file {major_rivers_mask_fp}")
+            raise error
+        else:
+            major_rivers_filtered_polygons = filter_by_intersection(
+                gpd_data=waterbody_polygons,
+                gpd_filter=major_rivers,
+                filtertype="intersects",
+                invert_mask=True,
+                return_inverse=False,
+            )
+            _log.info(
+                f"Filtered out {len(waterbody_polygons) - len(major_rivers_filtered_polygons)} waterbody polygons."
+            )
+            return major_rivers_filtered_polygons
+    else:
+        _log.info("Skipping filtering out major rivers polygons step.")
+        return waterbody_polygons
 
 
 def pp_test_gdf(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
