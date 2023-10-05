@@ -88,8 +88,8 @@ def filter_by_intersection(
 
 
 def filter_by_area(
-    primary_threshold_polygons: gpd.GeoDataFrame,
-    secondary_threshold_polygons: gpd.GeoDataFrame,
+    primary_threshold_polygons: gpd.GeoDataFrame | None,
+    secondary_threshold_polygons: gpd.GeoDataFrame | None,
     min_polygon_size: float = 4500,
     max_polygon_size: float = math.inf,
 ) -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
@@ -112,34 +112,47 @@ def filter_by_area(
         The area filtered primary threshold polygons and the area filtered
         secondary threshold polygons.
     """
-    assert primary_threshold_polygons.crs == secondary_threshold_polygons.crs
-    crs = primary_threshold_polygons.crs
+    if primary_threshold_polygons is not None and secondary_threshold_polygons is not None:
+        assert primary_threshold_polygons.crs == secondary_threshold_polygons.crs
+    else:
+        try:
+            crs = primary_threshold_polygons.crs
+        except Exception:
+            crs = secondary_threshold_polygons.crs
+
     assert crs.is_projected
 
-    _log.info(
-        f"Filtering primary threshold polygons by minimum area {min_polygon_size} and max area {max_polygon_size}..."
-    )
-
-    primary_threshold_polygons["area"] = pd.to_numeric(primary_threshold_polygons.area)
-    area_filtered_primary_threshold_polygons = primary_threshold_polygons.loc[
-        (
-            (primary_threshold_polygons["area"] > min_polygon_size)
-            & (primary_threshold_polygons["area"] <= max_polygon_size)
+    if primary_threshold_polygons is not None:
+        _log.info(
+            f"Filtering primary threshold polygons by minimum area {min_polygon_size} and max area {max_polygon_size}..."
         )
-    ]
-    _log.info(
-        f"Filtered out {len(primary_threshold_polygons) - len(area_filtered_primary_threshold_polygons)} primary threshold polygons."
-    )
 
-    _log.info(f"Filtering secondary threshold polygons by max area {max_polygon_size}...")
+        primary_threshold_polygons["area"] = pd.to_numeric(primary_threshold_polygons.area)
+        area_filtered_primary_threshold_polygons = primary_threshold_polygons.loc[
+            (
+                (primary_threshold_polygons["area"] > min_polygon_size)
+                & (primary_threshold_polygons["area"] <= max_polygon_size)
+            )
+        ]
+        _log.info(
+            f"Filtered out {len(primary_threshold_polygons) - len(area_filtered_primary_threshold_polygons)} primary threshold polygons."
+        )
+    else:
+        area_filtered_primary_threshold_polygons = None
 
-    secondary_threshold_polygons["area"] = pd.to_numeric(secondary_threshold_polygons.area)
-    area_filtered_secondary_threshold_polygons = secondary_threshold_polygons.loc[
-        secondary_threshold_polygons["area"] <= max_polygon_size
-    ]
-    _log.info(
-        f"Filtered out {len(secondary_threshold_polygons) - len(area_filtered_secondary_threshold_polygons)} secondary threshold polygons."
-    )
+    if secondary_threshold_polygons is not None:
+        _log.info(f"Filtering secondary threshold polygons by max area {max_polygon_size}...")
+
+        secondary_threshold_polygons["area"] = pd.to_numeric(secondary_threshold_polygons.area)
+        area_filtered_secondary_threshold_polygons = secondary_threshold_polygons.loc[
+            secondary_threshold_polygons["area"] <= max_polygon_size
+        ]
+        _log.info(
+            f"Filtered out {len(secondary_threshold_polygons) - len(area_filtered_secondary_threshold_polygons)} secondary threshold polygons."
+        )
+    else:
+        area_filtered_secondary_threshold_polygons = None
+
     return area_filtered_primary_threshold_polygons, area_filtered_primary_threshold_polygons
 
 
@@ -611,13 +624,17 @@ def filter_waterbodies(
 
     # Reapply the size filtering, just to check that all of the split and filtered waterbodies are
     # still in the size range we want.
-    large_polygons_handled["area"] = large_polygons_handled.area
-    filtered_polygons = large_polygons_handled.loc[
-        (
-            (large_polygons_handled["area"] > min_polygon_size)
-            & (large_polygons_handled["area"] <= max_polygon_size)
-        )
-    ]
+    area_filtered_large_polygons_handled, _ = filter_by_area(
+        primary_threshold_polygons=large_polygons_handled,
+        secondary_threshold_polygons=None,
+        min_polygon_size=min_polygon_size,
+        max_polygon_size=max_polygon_size,
+    )
 
     # Return a GeoDataFrame with the geometry column only.
-    return filtered_polygons[["geometry"]]
+    filtered_polygons = gpd.GeoDataFrame(
+        geometry=area_filtered_large_polygons_handled["geometry"],
+        crs=area_filtered_large_polygons_handled.crs,
+    )
+
+    return filtered_polygons
