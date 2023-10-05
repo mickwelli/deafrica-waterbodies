@@ -1,7 +1,6 @@
 import logging
 import os
 import re
-import shutil
 import urllib
 import uuid
 from pathlib import Path
@@ -185,113 +184,58 @@ def upload_file_to_s3(
 def write_waterbodies_to_file(
     waterbodies_gdf: gpd.GeoDataFrame,
     product_version: str,
-    storage_location: str,
-    output_bucket_name: str,
-    output_local_folder: str,
-    output_file_name: str,
-    output_file_type: str,
+    output_directory: str | Path,
 ):
     """
-    Function to GeoDataFrame of waterbody polygons to an ESRI Shapefile or GeoJSON file.
+    Function to write waterbody polygons to an ESRI Shapefile.
 
     Parameters
     ----------
     waterbodies_gdf : gpd.GeoDataFrame
         The waterbody polygons.
-    product_version : str
-        The DE Africa Waterbodies product version number.
-    storage_location : str
-        Type of storage location. Either "local" or "s3".
-    output_bucket_name : str
-        The name of the S3 Bucket to write the polygons to.
-    output_local_folder : str
-        The file path of the local folder to write the polygons to.
-    output_file_name : str
-        The name of the file to write the waterbody polygons to.
-    output_file_type : str
-        File type to write the polygons to. Either "GeoJSON" or "ESRI Shapefile"
+    product_version: str,
+        The DE Africa Waterbodies service product version.
+    output_directory : str | Path,
+        S3 URI or File URI of the directory to write the waterbody polygons to.
 
     """
+    output_fn = f"waterbodiesv{product_version.replace('.', '-')[0]}.shp"
+    output_fp = os.path.join(output_directory, output_fn)
 
-    # Validate output file type.
-    valid_output_file_type = ["GeoJSON", "Shapefile"]
-    try:
-        if output_file_type == "GeoJSON":
-            output_file_extension = ".geojson"
-        elif output_file_type == "Shapefile":
-            output_file_extension = ".shp"
-        else:
-            _log.error(f"{output_file_type} is not implemented.")
-            raise ValueError(
-                f"Invalid output file type. Select a valid output from {valid_output_file_type}."
-            )
-    except Exception as error:
-        _log.exception(error)
-        raise error
-
-    object_prefix = f'{product_version.replace(".", "-")}/shapefile/'
-    object_name = f"{output_file_name}{output_file_extension}"
-
-    if storage_location == "local":
-        try:
-            local_dir_fp = os.path.join(output_local_folder, object_prefix)
-
-            if not os.path.exists(local_dir_fp):
-                os.makedirs(local_dir_fp)
-                _log.info(f"Output folder {local_dir_fp} created.")
-
-            local_file_fp = os.path.join(local_dir_fp, object_name)
-            absolute_local_file_fp = os.path.abspath(local_file_fp)
-
-            waterbodies_gdf.to_file(absolute_local_file_fp)
-
-            _log.info(f"Waterbodies written to local disk as {absolute_local_file_fp}")
-
-        except Exception as error:
-            _log.error(error)
-            raise error
-
-    elif storage_location == "s3":
+    if check_if_s3_uri(output_directory):
         # Get the service client.
         s3_client = boto3.client("s3")
 
-        check_s3_bucket_exists(output_bucket_name, s3_client)
+        # Get the bucket name and object prefix.
+        output_bucket_name = urllib.parse.urlparse(output_directory).netloc
+        output_object_prefix = urllib.parse.urlparse(output_directory).path.lstrip("/")
 
-        s3_uri = f"s3://{output_bucket_name}/{object_prefix}{object_name}"
+        # Make a temporary folder locally.
+        fs = fsspec.filesystem("file")
+        myuuid = str(uuid.uuid1())[:6]
+        local_temp_dir = f"temp_{myuuid}"
+        fs.mkdirs(local_temp_dir)
 
-        try:
-            if output_file_extension == ".geojson":
-                waterbodies_gdf.to_file(s3_uri)
+        # Write the waterbodies to the temporary folder.
+        local_temp_shapefile_fp = os.path.join(local_temp_dir, output_fn)
+        waterbodies_gdf.to_file(local_temp_shapefile_fp)
 
-            elif output_file_extension == ".shp":
-                # Make a temporary folder
-                myuuid = str(uuid.uuid1())[:6]
-                local_temp_dir = f"temp_{myuuid}"
-                os.mkdir(local_temp_dir)
+        # Upload each object in the temporary folder into s3.
+        local_temp_files = [i["name"] for i in fs.listdir(local_temp_dir)]
+        for local_temp_file in local_temp_files:
+            upload_file_to_s3(
+                file_name=local_temp_file,
+                bucket_name=output_bucket_name,
+                object_name=f"{output_object_prefix}/{os.path.split(local_temp_file)[-1]}",
+                s3_client=s3_client,
+            )
 
-                # Write the waterbodies to the temporary folder.
-                local_temp_shapefile_fp = os.path.join(local_temp_dir, object_name)
-                waterbodies_gdf.to_file(local_temp_shapefile_fp)
+        # Remove the temporary directory
+        fs.rm(local_temp_dir, recursive=True)
+    else:
+        waterbodies_gdf.to_file(output_fp)
 
-                # Upload each object in the temporary folder into s3.
-                local_temp_files = os.listdir(local_temp_dir)
-                for local_temp_file in local_temp_files:
-                    local_temp_file_fp = os.path.join(local_temp_dir, local_temp_file)
-                    upload_file_to_s3(
-                        file_name=local_temp_file_fp,
-                        bucket_name=output_bucket_name,
-                        object_name=f"{object_prefix}{local_temp_file}",
-                        s3_client=s3_client,
-                    )
-
-                # Delete temporary folder.
-                shutil.rmtree(local_temp_dir)
-
-            _log.info(f"Waterbodies written to s3 bucket {output_bucket_name} as {s3_uri}")
-
-        except Exception as error:
-            _log.error(error)
-            raise error
+    _log.info(f"Waterbody polygons written to {output_fp}")
 
 
 def find_parquet_files(path: str | Path, pattern: str = ".*") -> [str]:
