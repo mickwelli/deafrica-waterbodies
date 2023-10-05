@@ -148,7 +148,7 @@ def filter_using_land_sea_mask(
     primary_threshold_polygons: gpd.GeoDataFrame,
     secondary_threshold_polygons: gpd.GeoDataFrame,
     land_sea_mask_fp: str | Path = "",
-):
+) -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
     """
     Filter the primary and secondary threshold waterbody polygons using a land/sea
     mask to filter out ocean polygons.
@@ -174,7 +174,7 @@ def filter_using_land_sea_mask(
 
     if land_sea_mask_fp:
         _log.info(
-            "Filtering out ocean polygons from the primary and secondary threshold waterbody polygons."
+            "Filtering out ocean polygons from the primary and secondary threshold waterbody polygons..."
         )
         try:
             land_sea_mask = gpd.read_file(land_sea_mask_fp).to_crs(crs)
@@ -201,6 +201,50 @@ def filter_using_land_sea_mask(
     else:
         _log.info("Skipping filtering out ocean polygons step.")
         return primary_threshold_polygons, secondary_threshold_polygons
+
+
+def filter_using_urban_mask(
+    primary_threshold_polygons: gpd.GeoDataFrame,
+    urban_mask_fp: str | Path = "",
+) -> gpd.GeoDataFrame:
+    """
+    Filter out the missclassified waterbodies from the primary threshold polygons
+    using an urban/CBDs mask.
+    WOfS has a known limitation, where deep shadows thrown by tall CBD buildings
+    are misclassified as water. This results in 'waterbodies' around these
+    misclassified shadows in capital cities.
+
+    Parameters
+    ----------
+    primary_threshold_polygons : gpd.GeoDataFrame
+    urban_mask_fp : str | Path, optional
+        Vector file path to the polygons to use to filter out CBDs, by default ""
+
+    Returns
+    -------
+    gpd.GeoDataFrame
+        Primary threshold polygons with missclassified waterbodies removed.
+    """
+    crs = primary_threshold_polygons.crs
+
+    if urban_mask_fp:
+        _log.info("Filtering out CBDs polygons from the primary threshold polygons...")
+        try:
+            urban_mask = gpd.read_file(urban_mask_fp).to_crs(crs)
+        except Exception as error:
+            _log.exception(f"Could not read file {urban_mask_fp}")
+            raise error
+        else:
+            cbd_filtered_primary_threshold_polygons, _ = filter_geodataframe_by_intersection(
+                primary_threshold_polygons, urban_mask
+            )
+            _log.info(
+                f"Filtered out {len(primary_threshold_polygons) - len(cbd_filtered_primary_threshold_polygons)} primary threshold polygons."
+            )
+            return cbd_filtered_primary_threshold_polygons
+    else:
+        _log.info("Skipping filtering out CBDs step.")
+        return primary_threshold_polygons
 
 
 def pp_test_gdf(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
