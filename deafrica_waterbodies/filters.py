@@ -114,11 +114,11 @@ def filter_by_area(
     """
     if primary_threshold_polygons is not None and secondary_threshold_polygons is not None:
         assert primary_threshold_polygons.crs == secondary_threshold_polygons.crs
-    else:
-        try:
-            crs = primary_threshold_polygons.crs
-        except Exception:
-            crs = secondary_threshold_polygons.crs
+
+    try:
+        crs = primary_threshold_polygons.crs
+    except Exception:
+        crs = secondary_threshold_polygons.crs
 
     assert crs.is_projected
 
