@@ -86,7 +86,7 @@ def get_timeseries_s3_object_url(
 
 
 def add_timeseries_attribute(
-    polygons: gpd.GeoDataFrame, product_version: str, output_bucket_name: str
+    polygons: gpd.GeoDataFrame, product_version: str, timeseries_bucket: str
 ) -> gpd.GeoDataFrame:
     """
     Function to assign the s3 object URL for the timeseries for each waterbody polygon.
@@ -97,8 +97,8 @@ def add_timeseries_attribute(
         GeoDataFrame containing the waterbody polygons.
     product_version : str
         The product version for the DE Africa Waterbodies service.
-    output_bucket_name : str
-        The s3 bucket for the DE Africa Waterbodies service shapefiles and timeseries.
+    timeseries_bucket : str
+        The s3 bucket for the DE Africa Waterbodies service timeseries.
 
     Returns
     -------
@@ -111,9 +111,9 @@ def add_timeseries_attribute(
 
     polygons["timeseries"] = polygons.apply(
         lambda row: get_timeseries_s3_object_url(
-            row["UID"],
-            product_version,
-            output_bucket_name,
+            uid=row["UID"],
+            product_version=product_version,
+            timeseries_bucket=timeseries_bucket,
         ),
         axis=1,
     )
