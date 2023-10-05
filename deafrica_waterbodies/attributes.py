@@ -50,7 +50,7 @@ def assign_unique_ids(polygons: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 def get_timeseries_s3_object_url(
     uid: str,
     product_version: str,
-    output_bucket_name: str,
+    timeseries_bucket: str,
 ) -> str:
     """
     Get the timeseries s3 object URL given a unique identifier for a polygon.
@@ -61,8 +61,8 @@ def get_timeseries_s3_object_url(
         Unique identifier
     product_version : str
         The product version for the DE Africa Waterbodies service.
-    output_bucket_name : str
-        The s3 bucket for the DE Africa Waterbodies service shapefiles and timeseries.
+    timeseries_bucket : str
+        The s3 bucket for the DE Africa Waterbodies service timeseries.
 
     Returns
     -------
@@ -71,8 +71,8 @@ def get_timeseries_s3_object_url(
     """
 
     # Incase storage location is local.
-    if output_bucket_name is None:
-        output_bucket_name == "deafrica-waterbodies-dev"
+    if timeseries_bucket is None:
+        timeseries_bucket == "deafrica-waterbodies-dev"
 
     version = product_version.replace(".", "-")
 
@@ -80,7 +80,7 @@ def get_timeseries_s3_object_url(
 
     csv_file = f"{uid}_v{version[0]}.csv"
 
-    timeseries_s3_object_url = f"https://{output_bucket_name}.s3.af-south-1.amazonaws.com/{version}/timeseries/{subfolder}/{csv_file}"
+    timeseries_s3_object_url = f"https://{timeseries_bucket}.s3.af-south-1.amazonaws.com/{version}/timeseries/{subfolder}/{csv_file}"
 
     return timeseries_s3_object_url
 
