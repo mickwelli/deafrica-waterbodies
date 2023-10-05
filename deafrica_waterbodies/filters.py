@@ -4,6 +4,7 @@ Filter waterbody polygons based on different criteria.
 import logging
 import math
 import warnings
+from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
@@ -141,6 +142,65 @@ def filter_by_area(
         f"Filtered out {len(secondary_threshold_polygons) - len(area_filtered_secondary_threshold_polygons)} secondary threshold polygons."
     )
     return area_filtered_primary_threshold_polygons, area_filtered_primary_threshold_polygons
+
+
+def filter_using_land_sea_mask(
+    primary_threshold_polygons: gpd.GeoDataFrame,
+    secondary_threshold_polygons: gpd.GeoDataFrame,
+    land_sea_mask_fp: str | Path = "",
+):
+    """
+    Filter the primary and secondary threshold waterbody polygons using a land/sea
+    mask to filter out ocean polygons.
+
+    Parameters
+    ----------
+    primary_threshold_polygons : gpd.GeoDataFrame
+    secondary_threshold_polygons : gpd.GeoDataFrame
+    land_sea_mask_fp : str | Path, optional
+        Vector file path to the polygons to use to filter out ocean waterbody polygons, by default ""
+
+    Returns
+    -------
+    tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
+        The filtered primary threshold polygons and the filtered
+        secondary threshold polygons with ocean polygons removed.
+    """
+    assert primary_threshold_polygons.crs == secondary_threshold_polygons.crs
+    crs = primary_threshold_polygons.crs
+
+    # Support pathlib Paths
+    land_sea_mask_fp = str(land_sea_mask_fp)
+
+    if land_sea_mask_fp:
+        _log.info(
+            "Filtering out ocean polygons from the primary and secondary threshold waterbody polygons."
+        )
+        try:
+            land_sea_mask = gpd.read_file(land_sea_mask_fp).to_crs(crs)
+        except Exception as error:
+            _log.exception(f"Could not read file {land_sea_mask_fp}")
+            raise error
+        else:
+            inland_primary_threshold_polygons, _ = filter_geodataframe_by_intersection(
+                primary_threshold_polygons, land_sea_mask, invert_mask=True
+            )
+            _log.info(
+                f"Filtered out {len(primary_threshold_polygons) - len(inland_primary_threshold_polygons)} primary threshold polygons."
+            )
+
+            inland_secondary_threshold_polygons, _ = filter_geodataframe_by_intersection(
+                secondary_threshold_polygons, land_sea_mask, invert_mask=True
+            )
+            _log.info(
+                f"Filtered out {len(secondary_threshold_polygons) - len(inland_secondary_threshold_polygons)} secondary threshold polygons."
+            )
+
+            return inland_primary_threshold_polygons, inland_secondary_threshold_polygons
+
+    else:
+        _log.info("Skipping filtering out ocean polygons step.")
+        return primary_threshold_polygons, secondary_threshold_polygons
 
 
 def pp_test_gdf(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
