@@ -18,6 +18,9 @@ from deafrica_waterbodies.cli.logs import logging_setup
     help="Directory containing the waterbody polygons.",
 )
 def merge_polygons_at_ds_boundaries(verbose, output_directory):
+    """
+    Merge polygons at dataset boundaries.
+    """
     # Set up logger.
     logging_setup(verbose=verbose)
     _log = logging.getLogger(__name__)
