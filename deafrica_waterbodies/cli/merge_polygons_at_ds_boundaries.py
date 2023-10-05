@@ -77,8 +77,7 @@ def merge_polygons_at_ds_boundaries(verbose, output_directory):
     )
 
     primary_threshold_polygons_merged.to_parquet(primary_threshold_polygons_output_fp)
-    secondary_threshold_polygons_merged.to_parquet(secondary_threshold_polygons_output_fp)
+    _log.info(f"Primary threshold polygons written to {primary_threshold_polygons_output_fp}")
 
-    _log.info(
-        f"Polygons written to {primary_threshold_polygons_output_fp} and {secondary_threshold_polygons_output_fp}"
-    )
+    secondary_threshold_polygons_merged.to_parquet(secondary_threshold_polygons_output_fp)
+    _log.info(f"Secondary threshold polygons written to {secondary_threshold_polygons_output_fp}")
