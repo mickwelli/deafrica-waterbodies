@@ -19,11 +19,10 @@ import numpy as np
 import pandas as pd
 import shapely
 import tqdm
-from datacube.utils.geometry import Geometry
 from deafrica_tools.spatial import xr_vectorize
 
 from deafrica_waterbodies.attributes import assign_unique_ids
-from deafrica_waterbodies.filters import filter_geodataframe_by_intersection, filter_waterbodies
+from deafrica_waterbodies.filters import filter_by_intersection, filter_waterbodies
 
 _log = logging.getLogger(__name__)
 
@@ -194,8 +193,11 @@ def merge_polygons_at_dataset_boundaries(waterbody_polygons: gpd.GeoDataFrame) -
     )
 
     # Get the polygons at the dataset boundaries.
-    boundary_polygons, _, not_boundary_polygons = filter_geodataframe_by_intersection(
-        waterbody_polygons, buffered_30m_ds_extents, invert_mask=False, return_inverse=True
+    boundary_polygons, not_boundary_polygons = filter_by_intersection(
+        gpd_data=waterbody_polygons,
+        gpd_filter=buffered_30m_ds_extents,
+        invert_mask=False,
+        return_inverse=True,
     )
 
     # Now combine overlapping polygons in boundary_polygons.
