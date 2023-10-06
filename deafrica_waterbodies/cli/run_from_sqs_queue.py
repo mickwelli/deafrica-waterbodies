@@ -7,10 +7,15 @@ import datacube
 import fsspec
 from rasterio.errors import RasterioIOError
 
-import deafrica_waterbodies.io
-import deafrica_waterbodies.make_polygons
-import deafrica_waterbodies.queues
 from deafrica_waterbodies.cli.logs import logging_setup
+from deafrica_waterbodies.io import check_dir_exists, check_file_exists, check_if_s3_uri
+from deafrica_waterbodies.make_polygons import check_wetness_thresholds, get_polygons_from_dataset
+from deafrica_waterbodies.queues import (
+    delete_batch_with_retry,
+    get_queue_url,
+    move_to_dead_letter_queue,
+    receive_a_message,
+)
 
 
 @click.command("run-from-sqs-queue", no_args_is_help=True)
@@ -88,7 +93,7 @@ def run_from_sqs_queue(
     output_crs = "EPSG:6933"
 
     # Instanstiate the filesystem to use.
-    if deafrica_waterbodies.io.check_if_s3_uri(output_directory):
+    if check_if_s3_uri(output_directory):
         fs = fsspec.filesystem("s3")
     else:
         fs = fsspec.filesystem("file")
@@ -97,13 +102,13 @@ def run_from_sqs_queue(
     polygons_from_thresholds_dir = os.path.join(output_directory, "polygons_from_thresholds")
 
     # Check if the directory exists. If it does not, create it.
-    if not deafrica_waterbodies.io.check_dir_exists(polygons_from_thresholds_dir):
+    if not check_dir_exists(polygons_from_thresholds_dir):
         fs.mkdirs(polygons_from_thresholds_dir, exist_ok=True)
         _log.info(f"Created directory {polygons_from_thresholds_dir}")
 
     # Check if the wetness thresholds have been set correctly.
     minimum_wet_thresholds = [secondary_threshold, primary_threshold]
-    _log.info(deafrica_waterbodies.make_polygons.check_wetness_thresholds(minimum_wet_thresholds))
+    _log.info(check_wetness_thresholds(minimum_wet_thresholds))
 
     # Connect to the datacube.
     dc = datacube.Datacube(app="GenerateWaterbodyPolygons")
@@ -111,19 +116,15 @@ def run_from_sqs_queue(
     # Create the service client.
     sqs_client = boto3.client("sqs")
 
-    dataset_ids_queue_url = deafrica_waterbodies.queues.get_queue_url(
-        queue_name=dataset_ids_queue, sqs_client=sqs_client
-    )
+    dataset_ids_queue_url = get_queue_url(queue_name=dataset_ids_queue, sqs_client=sqs_client)
     # Get the dead-letter queue.
     dead_letter_queue_name = f"{dataset_ids_queue}-deadletter"
-    dead_letter_queue_url = deafrica_waterbodies.queues.get_queue_url(
-        queue_name=dead_letter_queue_name, sqs_client=sqs_client
-    )
+    dead_letter_queue_url = get_queue_url(queue_name=dead_letter_queue_name, sqs_client=sqs_client)
 
     retries = 0
     while retries <= max_retries:
         # Retrieve a single message from the dataset_ids_queue.
-        message = deafrica_waterbodies.queues.receive_a_message(
+        message = receive_a_message(
             queue_url=dataset_ids_queue_url,
             max_retries=max_retries,
             visibility_timeout=visibility_timeout,
@@ -156,16 +157,16 @@ def run_from_sqs_queue(
                 _log.info(
                     f"Checking existence of {primary_threshold_polygons_fp} and {secondary_threshold_polygons_fp}"
                 )
-                exists = deafrica_waterbodies.io.check_file_exists(
-                    primary_threshold_polygons_fp
-                ) and deafrica_waterbodies.io.check_file_exists(secondary_threshold_polygons_fp)
+                exists = check_file_exists(primary_threshold_polygons_fp) and check_file_exists(
+                    secondary_threshold_polygons_fp
+                )
 
             if overwrite or not exists:
                 try:
                     (
                         primary_threshold_polygons,
                         secondary_threshold_polygons,
-                    ) = deafrica_waterbodies.make_polygons.get_polygons_using_thresholds(
+                    ) = get_polygons_from_dataset(
                         dataset_id=dataset_id,
                         dask_chunks=dask_chunks,
                         resolution=resolution,
@@ -183,7 +184,7 @@ def run_from_sqs_queue(
                 except KeyError as keyerr:
                     _log.exception(f"Found {dataset_id} has KeyError: {str(keyerr)}")
                     _log.error(f"Moving {dataset_id} to deadletter queue {dead_letter_queue_url}")
-                    deafrica_waterbodies.queues.move_to_dead_letter_queue(
+                    move_to_dead_letter_queue(
                         dead_letter_queue_url=dead_letter_queue_url,
                         message_body=dataset_id,
                         sqs_client=sqs_client,
@@ -192,7 +193,7 @@ def run_from_sqs_queue(
                 except TypeError as typeerr:
                     _log.exception(f"Found {dataset_id} has TypeError: {str(typeerr)}")
                     _log.error(f"Moving {dataset_id} to deadletter queue {dead_letter_queue_url}")
-                    deafrica_waterbodies.queues.move_to_dead_letter_queue(
+                    move_to_dead_letter_queue(
                         dead_letter_queue_url=dead_letter_queue_url,
                         message_body=dataset_id,
                         sqs_client=sqs_client,
@@ -201,7 +202,7 @@ def run_from_sqs_queue(
                 except RasterioIOError as ioerror:
                     _log.exception(f"Found {dataset_id} has RasterioIOError: {str(ioerror)}")
                     _log.error(f"Moving {dataset_id} to deadletter queue {dead_letter_queue_url}")
-                    deafrica_waterbodies.queues.move_to_dead_letter_queue(
+                    move_to_dead_letter_queue(
                         dead_letter_queue_url=dead_letter_queue_url,
                         message_body=dataset_id,
                         sqs_client=sqs_client,
@@ -218,7 +219,7 @@ def run_from_sqs_queue(
                 (
                     successfully_deleted,
                     failed_to_delete,
-                ) = deafrica_waterbodies.queues.delete_batch_with_retry(
+                ) = delete_batch_with_retry(
                     queue_url=dataset_ids_queue_url,
                     entries=entry_to_delete,
                     max_retries=max_retries,
