@@ -90,7 +90,7 @@ def run_from_txt(
     # Directory to write generated waterbody polygons to.
     polygons_from_thresholds_dir = os.path.join(output_directory, "polygons_from_thresholds")
 
-    # Instanstiate the filesystem to use.
+    # Set the filesystem to use.
     if check_if_s3_uri(polygons_from_thresholds_dir):
         fs = fsspec.filesystem("s3")
     else:

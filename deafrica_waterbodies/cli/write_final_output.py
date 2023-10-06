@@ -4,9 +4,13 @@ import os
 import click
 import geopandas as gpd
 
-import deafrica_waterbodies.attributes
-import deafrica_waterbodies.io
+from deafrica_waterbodies.attributes import (
+    add_area_and_perimeter_attributes,
+    add_timeseries_attribute,
+    assign_unique_ids,
+)
 from deafrica_waterbodies.cli.logs import logging_setup
+from deafrica_waterbodies.io import write_waterbodies_to_file
 
 
 @click.command("write-final-output", no_args_is_help=True)
@@ -47,11 +51,9 @@ def write_final_output(
     filtered_polygons = gpd.read_parquet(filtered_polygons_fp)
     _log.info(f"Waterbody polygons count {len(filtered_polygons)}.")
 
-    waterbodies_gdf = deafrica_waterbodies.attributes.assign_unique_ids(polygons=filtered_polygons)
-    waterbodies_gdf = deafrica_waterbodies.attributes.add_area_and_perimeter_attributes(
-        polygons=waterbodies_gdf
-    )
-    waterbodies_gdf = deafrica_waterbodies.attributes.add_timeseries_attribute(
+    waterbodies_gdf = assign_unique_ids(polygons=filtered_polygons)
+    waterbodies_gdf = add_area_and_perimeter_attributes(polygons=waterbodies_gdf)
+    waterbodies_gdf = add_timeseries_attribute(
         polygons=waterbodies_gdf,
         product_version=product_version,
         timeseries_bucket=timeseries_bucket,
@@ -61,7 +63,7 @@ def write_final_output(
     waterbodies_gdf_4326 = waterbodies_gdf.to_crs("EPSG:4326")
 
     # Write to disk.
-    deafrica_waterbodies.io.write_waterbodies_to_file(
+    write_waterbodies_to_file(
         waterbodies_gdf=waterbodies_gdf_4326,
         product_version=product_version,
         output_directory=output_directory,

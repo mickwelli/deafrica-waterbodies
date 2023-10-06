@@ -92,7 +92,7 @@ def run_from_sqs_queue(
     resolution = (-30, 30)
     output_crs = "EPSG:6933"
 
-    # Instanstiate the filesystem to use.
+    # Set the filesystem to use.
     if check_if_s3_uri(output_directory):
         fs = fsspec.filesystem("s3")
     else:

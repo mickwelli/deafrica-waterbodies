@@ -26,7 +26,6 @@ def check_wetness_thresholds(minimum_wet_thresholds: list) -> str:
     """
     Function to validate the wetness thresholds.
 
-
     Parameters
     ----------
     minimum_wet_thresholds : list

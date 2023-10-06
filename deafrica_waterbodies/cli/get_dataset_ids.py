@@ -57,7 +57,7 @@ def get_dataset_ids(
     # intersects with the area of interest.
     dataset_ids = get_datasets_ids(aoi_gdf=aoi_gdf, num_workers=num_workers)
 
-    # Instanstiate the filesystem to use.
+    # Set the filesystem to use.
     if check_if_s3_uri(dataset_ids_text_file):
         fs = fsspec.filesystem("s3")
     else:
