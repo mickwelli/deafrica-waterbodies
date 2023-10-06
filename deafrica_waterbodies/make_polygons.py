@@ -8,6 +8,7 @@ Geoscience Australia - 2021
 """
 
 import logging
+from pathlib import Path
 
 import datacube
 import datacube.model
@@ -15,6 +16,7 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import shapely
+from datacube.testutils.io import rio_slurp_xarray
 from deafrica_tools.spatial import xr_vectorize
 
 from deafrica_waterbodies.filters import filter_by_intersection
@@ -61,7 +63,7 @@ def check_wetness_thresholds(minimum_wet_thresholds: list) -> str:
 
 def merge_polygons_at_dataset_boundaries(waterbody_polygons: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
-    Function to merge waterbody polygons located at WOfS All Time Summary scene/dataset boundaries.
+    Function to merge waterbody polygons located at WOfS All Time Summary dataset boundaries.
 
     Parameters
     ----------
@@ -71,7 +73,7 @@ def merge_polygons_at_dataset_boundaries(waterbody_polygons: gpd.GeoDataFrame) -
     Returns
     -------
     gpd.GeoDataFrame
-        Waterbody polygons with polygons located at WOfS All Time Summary scene/dataset boundaries merged.
+        Waterbody polygons with polygons located at WOfS All Time Summary dataset boundaries merged.
     """
     # Get the dataset extents/regions for the WOfS All Time Summary product.
     ds_extents = gpd.read_file(
@@ -124,12 +126,12 @@ def get_polygons_from_dataset(
     dc: datacube.Datacube | None = None,
 ) -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
     """
-    Generate water body polygons by thresholding a WOfS All Time Summary scene.
+    Generate water body polygons by thresholding a WOfS All Time Summary dataset.
 
     Parameters
     ----------
     dataset_id : str
-        The dataset id of a WOfs All Time summary scene for which to
+        The dataset id of a WOfs All Time summary dataset for which to
         generate waterbody polygons for.
     dask_chunks : dict, optional
         dask_chunks to use to load WOfS data, by default {"x": 3200, "y": 3200, "time": 1}
@@ -171,7 +173,7 @@ def get_polygons_from_dataset(
     dataset = dc.index.datasets.get(dataset_id)
 
     # Generate the waterbody polygons using the primary and secondary thresholds,
-    # from the dataset/scene.
+    # from the dataset.
     try:
         _log.info(f"Generating water body polygons for dataset {dataset_id}")
 
@@ -231,7 +233,150 @@ def get_polygons_from_dataset(
     except Exception as error:
         _log.exception(
             f"\nDataset {str(dataset_id)} did not run. \n"
-            "This is probably because there are no waterbodies present in this scene."
+            "This is probably because there are no waterbodies present in this dataset."
+        )
+        _log.exception(error)
+
+    primary_threshold_polygons = generated_polygons[primary_threshold]
+    secondary_threshold_polygons = generated_polygons[secondary_threshold]
+
+    return primary_threshold_polygons, secondary_threshold_polygons
+
+
+def get_polygons_from_dataset_with_hydrosheds_land_mask_filtering(
+    dataset_id: str,
+    dask_chunks: dict[str, int] = {"x": 3200, "y": 3200, "time": 1},
+    resolution: tuple[int, int] = (-30, 30),
+    output_crs: str = "EPSG:6933",
+    min_valid_observations: int = 128,
+    primary_threshold: float = 0.1,
+    secondary_threshold: float = 0.05,
+    dc: datacube.Datacube | None = None,
+    hydrosheds_land_mask_fp: str | Path = "data/af_msk_3s.tif",
+) -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
+    """
+    Generate water body polygons by thresholding a WOfS All Time Summary dataset.
+    Use the HydroSHEDS Land Mask to mask out ocean pixels from the WOfS data before
+    vectorizing the polygons.
+
+    Parameters
+    ----------
+    dataset_id : str
+        The dataset id of a WOfs All Time summary dataset for which to
+        generate waterbody polygons for.
+    dask_chunks : dict, optional
+        dask_chunks to use to load WOfS data, by default {"x": 3200, "y": 3200, "time": 1}
+    resolution : tuple[int, int], optional
+        Resolution to use to load WOfS data, by default (-30, 30)
+    output_crs : str, optional
+        CRS to load data and for the output waterbody polygons, by default "EPSG:6933"
+    min_valid_observations : int, optional
+        Threshold to use to mask out pixels based on the number of valid WOfS observations for each pixel, by default 128
+    primary_threshold : float, optional
+        Threshold to use to determine the location of the waterbody polygons, by default 0.1
+    secondary_threshold : float, optional
+        Threshold to use to determine the extent / shape of the waterbodies polygons, by default 0.05
+    dc : datacube.Datacube | None, optional
+        Datacube connection, by default None
+    hydrosheds_land_mask_fp: str | Path
+        Path to the HydroSHEDS Land Mask GeoTIFF.
+    Returns
+    -------
+    tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]
+        A tuple containing GeoDataFrames of waterbody polygons generated from thresholding WOfS All Time Summary data
+        using the primary and secondary thresholds.
+
+    """
+    # Set up the primary and secondary thresholds.
+    minimum_wet_thresholds = [secondary_threshold, primary_threshold]
+
+    # Create a datacube query object.
+    query = dict(
+        dask_chunks=dask_chunks,
+        resolution=resolution,
+        output_crs=output_crs,
+    )
+
+    # Connect to the datacube.
+    if dc is None:
+        dc = datacube.Datacube(app="GenerateWaterbodyPolygons")
+
+    # Get the dataset.
+    dataset = dc.index.datasets.get(dataset_id)
+
+    # Generate the waterbody polygons using the primary and secondary thresholds,
+    # from the dataset.
+    try:
+        _log.info(f"Generating water body polygons for dataset {dataset_id}")
+
+        # Load the WOfS All-Time Summary dataset.
+        wofs_alltime_summary = dc.load(datasets=[dataset], **query).squeeze()
+
+        # Load the HydroSHEDs Land Sea Mask.
+        hydrosheds_land_mask = rio_slurp_xarray(
+            fname=hydrosheds_land_mask_fp, gbox=wofs_alltime_summary.geobox, resampling="bilinear"
+        )
+
+        # Mask the WOfS All-Time Summary dataset using the HydroSHEDS Land Mask.
+        # Indicator values: 1 = land, 2 = ocean sink, 3 = inland sink, 255 is no data.
+        wofs_alltime_summary = wofs_alltime_summary.where(
+            (hydrosheds_land_mask != 255) & (hydrosheds_land_mask != 2)
+        )
+
+        # Set the no-data values to nan.
+        # Masking here is done using the frequency measurement because for multiple
+        # areas NaN values are present in the frequency measurement but the
+        # no data value -999 is not present in the count_clear and
+        # count_wet measurements.
+        # Note: it seems some pixels with NaN values in the frequency measurement
+        # have a value of zero in the count_clear and/or the count_wet measurements.
+        wofs_alltime_summary = wofs_alltime_summary.where(~np.isnan(wofs_alltime_summary.frequency))
+
+        # Mask pixels not observed at least min_valid_observations times.
+        wofs_alltime_summary_valid_clear_count = (
+            wofs_alltime_summary.count_clear >= min_valid_observations
+        )
+
+        # Generate the polygons.
+        generated_polygons = {}
+        for threshold in minimum_wet_thresholds:
+            # Mask any pixels whose frequency of water detection is less than the threshold.
+            wofs_alltime_summary_valid_wetness = wofs_alltime_summary.frequency > threshold
+
+            # Now find pixels that meet both the minimum valid observations
+            # and minimum wet threshold criteria.
+            wofs_alltime_summary_valid = wofs_alltime_summary_valid_wetness.where(
+                wofs_alltime_summary_valid_wetness & wofs_alltime_summary_valid_clear_count
+            )
+
+            # Convert the raster to polygons.
+            # We use a mask of '1' to only generate polygons around values of '1' (not NaNs).
+            polygons_mask = wofs_alltime_summary_valid == 1
+
+            polygons = xr_vectorize(
+                wofs_alltime_summary_valid,
+                mask=polygons_mask,
+                crs=wofs_alltime_summary.geobox.crs,
+            )
+
+            # Combine any overlapping polygons.
+            merged_polygon_geoms = shapely.ops.unary_union(polygons["geometry"])
+
+            # Turn the combined multipolygon back into a GeoDataFrame.
+            try:
+                merged_polygons = gpd.GeoDataFrame(geometry=list(merged_polygon_geoms.geoms))
+            except AttributeError:
+                merged_polygons = gpd.GeoDataFrame(geometry=[merged_polygon_geoms])
+
+            # We need to add the crs back onto the GeoDataFrame.
+            merged_polygons.crs = wofs_alltime_summary.geobox.crs
+
+            generated_polygons[threshold] = merged_polygons
+
+    except Exception as error:
+        _log.exception(
+            f"\nDataset {str(dataset_id)} did not run. \n"
+            "This is probably because there are no waterbodies present in this dataset."
         )
         _log.exception(error)
 
