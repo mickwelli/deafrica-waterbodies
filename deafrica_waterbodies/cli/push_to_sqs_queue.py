@@ -3,8 +3,12 @@ import logging
 import boto3
 import click
 
-import deafrica_waterbodies.queues
 from deafrica_waterbodies.cli.logs import logging_setup
+from deafrica_waterbodies.queues import (
+    get_queue_url,
+    move_to_dead_letter_queue,
+    push_dataset_ids_to_queue_from_txt,
+)
 
 
 @click.command("push-to-sqs-queue", no_args_is_help=True)
@@ -36,7 +40,7 @@ def push_to_sqs_queue(verbose, dataset_ids_text_file, dataset_ids_queue, max_ret
     # Support pathlib paths.
     dataset_ids_text_file = str(dataset_ids_text_file)
 
-    failed_to_push = deafrica_waterbodies.queues.push_dataset_ids_to_queue_from_txt(
+    failed_to_push = push_dataset_ids_to_queue_from_txt(
         text_file_path=dataset_ids_text_file,
         queue_name=dataset_ids_queue,
         max_retries=max_retries,
@@ -46,12 +50,12 @@ def push_to_sqs_queue(verbose, dataset_ids_text_file, dataset_ids_queue, max_ret
     if failed_to_push:
         # Push the failed dataset ids to the deadletter queue.
         dead_letter_queue_name = f"{dataset_ids_queue}-deadletter"
-        dead_letter_queue_url = deafrica_waterbodies.queues.get_queue_url(
+        dead_letter_queue_url = get_queue_url(
             queue_name=dead_letter_queue_name, sqs_client=sqs_client
         )
 
         for idx in failed_to_push:
-            deafrica_waterbodies.queues.move_to_dead_letter_queue(
+            move_to_dead_letter_queue(
                 dead_letter_queue_url=dead_letter_queue_url,
                 message_body=idx,
                 max_retries=max_retries,
