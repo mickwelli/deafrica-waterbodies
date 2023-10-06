@@ -9,6 +9,7 @@ Geoscience Australia - 2021
 
 import logging
 from pathlib import Path
+from typing import Callable
 
 import datacube
 import datacube.model
@@ -19,7 +20,7 @@ import shapely
 from datacube.testutils.io import rio_slurp_xarray
 from deafrica_tools.spatial import xr_vectorize
 
-from deafrica_waterbodies.filters import filter_by_intersection
+from deafrica_waterbodies.filters import filter_by_intersection, filter_hydrosheds_land_mask
 
 _log = logging.getLogger(__name__)
 
@@ -243,7 +244,7 @@ def get_polygons_from_dataset(
     return primary_threshold_polygons, secondary_threshold_polygons
 
 
-def get_polygons_from_dataset_with_hydrosheds_land_mask_filtering(
+def get_polygons_from_dataset_with_land_sea_mask_filtering(
     dataset_id: str,
     dask_chunks: dict[str, int] = {"x": 3200, "y": 3200, "time": 1},
     resolution: tuple[int, int] = (-30, 30),
@@ -252,11 +253,13 @@ def get_polygons_from_dataset_with_hydrosheds_land_mask_filtering(
     primary_threshold: float = 0.1,
     secondary_threshold: float = 0.05,
     dc: datacube.Datacube | None = None,
-    hydrosheds_land_mask_fp: str | Path = "data/af_msk_3s.tif",
+    land_sea_mask_fp: str | Path = "",
+    resampling_method: str = "bilinear",
+    filter_land_sea_mask: Callable = filter_hydrosheds_land_mask,
 ) -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
     """
     Generate water body polygons by thresholding a WOfS All Time Summary dataset.
-    Use the HydroSHEDS Land Mask to mask out ocean pixels from the WOfS data before
+    Use a raster land/sea mask to mask out ocean pixels from the WOfS data before
     vectorizing the polygons.
 
     Parameters
@@ -278,8 +281,14 @@ def get_polygons_from_dataset_with_hydrosheds_land_mask_filtering(
         Threshold to use to determine the extent / shape of the waterbodies polygons, by default 0.05
     dc : datacube.Datacube | None, optional
         Datacube connection, by default None
-    hydrosheds_land_mask_fp: str | Path
-        Path to the HydroSHEDS Land Mask GeoTIFF.
+    land_sea_mask_fp: str | Path, optional
+        File path to raster to use to mask ocean pixels in WOfS data, by default ""
+    resampling_method: str, optional
+        Resampling method to use when loading the land sea mask raster, by default "bilinear"
+    filter_land_sea_mask: Callable, optional
+        Function to apply to the land sea mask xr.DataArray to generate a boolean
+        mask where pixels with a value of True are land pixels and pixels with a
+        value of False are ocean pixels, by default `filter_hydrosheds_land_mask`
     Returns
     -------
     tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]
@@ -312,16 +321,19 @@ def get_polygons_from_dataset_with_hydrosheds_land_mask_filtering(
         # Load the WOfS All-Time Summary dataset.
         wofs_alltime_summary = dc.load(datasets=[dataset], **query).squeeze()
 
-        # Load the HydroSHEDs Land Sea Mask.
-        hydrosheds_land_mask = rio_slurp_xarray(
-            fname=hydrosheds_land_mask_fp, gbox=wofs_alltime_summary.geobox, resampling="bilinear"
-        )
+        # Load the land sea mask.
+        if land_sea_mask_fp:
+            land_sea_mask = rio_slurp_xarray(
+                fname=land_sea_mask_fp,
+                gbox=wofs_alltime_summary.geobox,
+                resampling=resampling_method,
+            )
 
-        # Mask the WOfS All-Time Summary dataset using the HydroSHEDS Land Mask.
-        # Indicator values: 1 = land, 2 = ocean sink, 3 = inland sink, 255 is no data.
-        wofs_alltime_summary = wofs_alltime_summary.where(
-            (hydrosheds_land_mask != 255) & (hydrosheds_land_mask != 2)
-        )
+            # Filter the land sea mask.
+            boolean_land_sea_mask = filter_land_sea_mask(land_sea_mask)
+
+            # Mask the WOfS All-Time Summary dataset using the boolean land sea mask.
+            wofs_alltime_summary = wofs_alltime_summary.where(boolean_land_sea_mask)
 
         # Set the no-data values to nan.
         # Masking here is done using the frequency measurement because for multiple
