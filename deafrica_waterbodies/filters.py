@@ -155,7 +155,7 @@ def filter_by_area(
     else:
         area_filtered_secondary_threshold_polygons = None
 
-    return area_filtered_primary_threshold_polygons, area_filtered_primary_threshold_polygons
+    return area_filtered_primary_threshold_polygons, area_filtered_secondary_threshold_polygons
 
 
 def filter_using_land_sea_mask(
