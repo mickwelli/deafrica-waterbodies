@@ -289,6 +289,7 @@ def get_polygons_from_dataset_with_land_sea_mask_filtering(
         Function to apply to the land sea mask xr.DataArray to generate a boolean
         mask where pixels with a value of True are land pixels and pixels with a
         value of False are ocean pixels, by default `filter_hydrosheds_land_mask`
+
     Returns
     -------
     tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]
@@ -389,6 +390,263 @@ def get_polygons_from_dataset_with_land_sea_mask_filtering(
         _log.exception(
             f"\nDataset {str(dataset_id)} did not run. \n"
             "This is probably because there are no waterbodies present in this dataset."
+        )
+        _log.exception(error)
+
+    primary_threshold_polygons = generated_polygons[primary_threshold]
+    secondary_threshold_polygons = generated_polygons[secondary_threshold]
+
+    return primary_threshold_polygons, secondary_threshold_polygons
+
+
+def get_polygons_from_tile(
+    tile: tuple[tuple[int, int], datacube.api.grid_workflow.Tile],
+    grid_workflow: datacube.api.GridWorkflow,
+    dask_chunks: dict[str, int] = {"x": 3200, "y": 3200, "time": 1},
+    min_valid_observations: int = 128,
+    primary_threshold: float = 0.1,
+    secondary_threshold: float = 0.05,
+    dc: datacube.Datacube | None = None,
+) -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
+    """
+    Generate water body polygons by thresholding a WOfS All Time Summary tile.
+
+    Parameters
+    ----------
+    tile : tuple[tuple[int,int], datacube.api.grid_workflow.Tile]
+        The WOfs All Time summary Tile object for which to
+        generate waterbody polygons for.
+    grid_workflow: datacube.api.GridWorkflow,
+        Grid Workflow used to generate the tiles and to be used to load the Tile object.
+    dask_chunks : dict, optional
+        dask_chunks to use to load WOfS data, by default {"x": 3200, "y": 3200, "time": 1}
+    min_valid_observations : int, optional
+        Threshold to use to mask out pixels based on the number of valid WOfS observations for each pixel, by default 128
+    primary_threshold : float, optional
+        Threshold to use to determine the location of the waterbody polygons, by default 0.1
+    secondary_threshold : float, optional
+        Threshold to use to determine the extent / shape of the waterbodies polygons, by default 0.05
+    dc : datacube.Datacube | None, optional
+        Datacube connection, by default None
+
+    Returns
+    -------
+    tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]
+        A tuple containing GeoDataFrames of waterbody polygons generated from thresholding WOfS All Time Summary data
+        using the primary and secondary thresholds.
+
+    """
+    # Set up the primary and secondary thresholds.
+    minimum_wet_thresholds = [secondary_threshold, primary_threshold]
+
+    # Get the tile id and tile object.
+    tile_id = tile[0]
+    tile_object = tile[1]
+
+    # Generate the waterbody polygons using the primary and secondary thresholds,
+    # from the tile.
+    try:
+        _log.info(f"Generating water body polygons for tile {tile_id}")
+
+        # Load the data for the tile.
+        wofs_alltime_summary = grid_workflow.load(tile_object, dask_chunks=dask_chunks).squeeze()
+
+        # Set the no-data values to nan.
+        # Masking here is done using the frequency measurement because for multiple
+        # areas NaN values are present in the frequency measurement but the
+        # no data value -999 is not present in the count_clear and
+        # count_wet measurements.
+        # Note: it seems some pixels with NaN values in the frequency measurement
+        # have a value of zero in the count_clear and/or the count_wet measurements.
+        wofs_alltime_summary = wofs_alltime_summary.where(~np.isnan(wofs_alltime_summary.frequency))
+
+        # Mask pixels not observed at least min_valid_observations times.
+        wofs_alltime_summary_valid_clear_count = (
+            wofs_alltime_summary.count_clear >= min_valid_observations
+        )
+
+        # Generate the polygons.
+        generated_polygons = {}
+        for threshold in minimum_wet_thresholds:
+            # Mask any pixels whose frequency of water detection is less than the threshold.
+            wofs_alltime_summary_valid_wetness = wofs_alltime_summary.frequency > threshold
+
+            # Now find pixels that meet both the minimum valid observations
+            # and minimum wet threshold criteria.
+            wofs_alltime_summary_valid = wofs_alltime_summary_valid_wetness.where(
+                wofs_alltime_summary_valid_wetness & wofs_alltime_summary_valid_clear_count
+            )
+
+            # Convert the raster to polygons.
+            # We use a mask of '1' to only generate polygons around values of '1' (not NaNs).
+            polygons_mask = wofs_alltime_summary_valid == 1
+
+            polygons = xr_vectorize(
+                wofs_alltime_summary_valid,
+                mask=polygons_mask,
+                crs=wofs_alltime_summary.geobox.crs,
+            )
+
+            # Combine any overlapping polygons.
+            merged_polygon_geoms = shapely.ops.unary_union(polygons["geometry"])
+
+            # Turn the combined multipolygon back into a GeoDataFrame.
+            try:
+                merged_polygons = gpd.GeoDataFrame(geometry=list(merged_polygon_geoms.geoms))
+            except AttributeError:
+                merged_polygons = gpd.GeoDataFrame(geometry=[merged_polygon_geoms])
+
+            # We need to add the crs back onto the GeoDataFrame.
+            merged_polygons.crs = wofs_alltime_summary.geobox.crs
+
+            generated_polygons[threshold] = merged_polygons
+
+    except Exception as error:
+        _log.exception(
+            f"\nTile {str(tile_id)} did not run. \n"
+            "This is probably because there are no waterbodies present in this tile."
+        )
+        _log.exception(error)
+
+    primary_threshold_polygons = generated_polygons[primary_threshold]
+    secondary_threshold_polygons = generated_polygons[secondary_threshold]
+
+    return primary_threshold_polygons, secondary_threshold_polygons
+
+
+def get_polygons_from_tile_with_land_sea_mask_filtering(
+    tile: tuple[tuple[int, int], datacube.api.grid_workflow.Tile],
+    grid_workflow: datacube.api.GridWorkflow,
+    dask_chunks: dict[str, int] = {"x": 3200, "y": 3200, "time": 1},
+    min_valid_observations: int = 128,
+    primary_threshold: float = 0.1,
+    secondary_threshold: float = 0.05,
+    dc: datacube.Datacube | None = None,
+    land_sea_mask_fp: str | Path = "",
+    resampling_method: str = "bilinear",
+    filter_land_sea_mask: Callable = filter_hydrosheds_land_mask,
+) -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
+    """
+    Generate water body polygons by thresholding a WOfS All Time Summary tile.
+    Use a raster land/sea mask to mask out ocean pixels from the WOfS data before
+    vectorizing the polygons.
+
+    Parameters
+    ----------
+    tile : tuple[tuple[int,int], datacube.api.grid_workflow.Tile]
+        The WOfs All Time summary Tile object for which to
+        generate waterbody polygons for.
+    grid_workflow: datacube.api.GridWorkflow,
+        Grid Workflow used to generate the tiles and to be used to load the Tile object.
+    dask_chunks : dict, optional
+        dask_chunks to use to load WOfS data, by default {"x": 3200, "y": 3200, "time": 1}
+    min_valid_observations : int, optional
+        Threshold to use to mask out pixels based on the number of valid WOfS observations for each pixel, by default 128
+    primary_threshold : float, optional
+        Threshold to use to determine the location of the waterbody polygons, by default 0.1
+    secondary_threshold : float, optional
+        Threshold to use to determine the extent / shape of the waterbodies polygons, by default 0.05
+    dc : datacube.Datacube | None, optional
+        Datacube connection, by default None
+    land_sea_mask_fp: str | Path, optional
+        File path to raster to use to mask ocean pixels in WOfS data, by default ""
+    resampling_method: str, optional
+        Resampling method to use when loading the land sea mask raster, by default "bilinear"
+    filter_land_sea_mask: Callable, optional
+        Function to apply to the land sea mask xr.DataArray to generate a boolean
+        mask where pixels with a value of True are land pixels and pixels with a
+        value of False are ocean pixels, by default `filter_hydrosheds_land_mask`
+
+    Returns
+    -------
+    tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]
+        A tuple containing GeoDataFrames of waterbody polygons generated from thresholding WOfS All Time Summary data
+        using the primary and secondary thresholds.
+
+    """
+    # Set up the primary and secondary thresholds.
+    minimum_wet_thresholds = [secondary_threshold, primary_threshold]
+
+    # Get the tile id and tile object.
+    tile_id = tile[0]
+    tile_object = tile[1]
+
+    # Generate the waterbody polygons using the primary and secondary thresholds,
+    # from the tile.
+    try:
+        _log.info(f"Generating water body polygons for tile {tile_id}")
+
+        # Load the data for the tile.
+        wofs_alltime_summary = grid_workflow.load(tile_object, dask_chunks=dask_chunks).squeeze()
+
+        # Load the land sea mask.
+        if land_sea_mask_fp:
+            land_sea_mask = rio_slurp_xarray(
+                fname=land_sea_mask_fp,
+                gbox=wofs_alltime_summary.geobox,
+                resampling=resampling_method,
+            )
+
+            # Filter the land sea mask.
+            boolean_land_sea_mask = filter_land_sea_mask(land_sea_mask)
+
+            # Mask the WOfS All-Time Summary dataset using the boolean land sea mask.
+            wofs_alltime_summary = wofs_alltime_summary.where(boolean_land_sea_mask)
+
+        # Set the no-data values to nan.
+        # Masking here is done using the frequency measurement because for multiple
+        # areas NaN values are present in the frequency measurement but the
+        # no data value -999 is not present in the count_clear and
+        # count_wet measurements.
+        # Note: it seems some pixels with NaN values in the frequency measurement
+        # have a value of zero in the count_clear and/or the count_wet measurements.
+        wofs_alltime_summary = wofs_alltime_summary.where(~np.isnan(wofs_alltime_summary.frequency))
+
+        # Mask pixels not observed at least min_valid_observations times.
+        wofs_alltime_summary_valid_clear_count = (
+            wofs_alltime_summary.count_clear >= min_valid_observations
+        )
+
+        # Generate the polygons.
+        generated_polygons = {}
+        for threshold in minimum_wet_thresholds:
+            # Mask any pixels whose frequency of water detection is less than the threshold.
+            wofs_alltime_summary_valid_wetness = wofs_alltime_summary.frequency > threshold
+
+            # Now find pixels that meet both the minimum valid observations
+            # and minimum wet threshold criteria.
+            wofs_alltime_summary_valid = wofs_alltime_summary_valid_wetness.where(
+                wofs_alltime_summary_valid_wetness & wofs_alltime_summary_valid_clear_count
+            )
+
+            # Convert the raster to polygons.
+            # We use a mask of '1' to only generate polygons around values of '1' (not NaNs).
+            polygons_mask = wofs_alltime_summary_valid == 1
+
+            polygons = xr_vectorize(
+                wofs_alltime_summary_valid,
+                mask=polygons_mask,
+                crs=wofs_alltime_summary.geobox.crs,
+            )
+
+            # Combine any overlapping polygons.
+            merged_polygon_geoms = shapely.ops.unary_union(polygons["geometry"])
+
+            # Turn the combined multipolygon back into a GeoDataFrame.
+            try:
+                merged_polygons = gpd.GeoDataFrame(geometry=list(merged_polygon_geoms.geoms))
+            except AttributeError:
+                merged_polygons = gpd.GeoDataFrame(geometry=[merged_polygon_geoms])
+
+            # We need to add the crs back onto the GeoDataFrame.
+            merged_polygons.crs = wofs_alltime_summary.geobox.crs
+
+            generated_polygons[threshold] = merged_polygons
+
+    except Exception as error:
+        _log.exception(
+            f"\nTile {str(tile_id)} did not run. \n"
+            "This is probably because there are no waterbodies present in this tile."
         )
         _log.exception(error)
 
