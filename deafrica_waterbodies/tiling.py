@@ -110,6 +110,7 @@ def tile_wofs_ls_summary_alltime(
 
     # Multiply the tile size.
     tile_size = tuple(tile_size_factor * elem for elem in gridspec.tile_size)
+    _log.info(f"New tile size is {tile_size}.")
 
     # Define new grid.
     gs = GridSpec(
