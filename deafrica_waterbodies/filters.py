@@ -134,6 +134,7 @@ def filter_by_area(
                 & (primary_threshold_polygons["area"] <= max_polygon_size)
             )
         ]
+        area_filtered_primary_threshold_polygons.reset_index(drop=True, inplace=True)
         _log.info(
             f"Filtered out {len(primary_threshold_polygons) - len(area_filtered_primary_threshold_polygons)} primary threshold polygons."
         )
@@ -147,6 +148,7 @@ def filter_by_area(
         area_filtered_secondary_threshold_polygons = secondary_threshold_polygons.loc[
             secondary_threshold_polygons["area"] <= max_polygon_size
         ]
+        area_filtered_secondary_threshold_polygons.reset_index(drop=True, inplace=True)
         _log.info(
             f"Filtered out {len(secondary_threshold_polygons) - len(area_filtered_secondary_threshold_polygons)} secondary threshold polygons."
         )
