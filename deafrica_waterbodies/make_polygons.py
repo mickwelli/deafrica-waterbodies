@@ -116,6 +116,62 @@ def merge_polygons_at_dataset_boundaries(waterbody_polygons: gpd.GeoDataFrame) -
     return all_polygons
 
 
+def merge_polygons_at_tile_boundaries(
+    waterbody_polygons: gpd.GeoDataFrame, tile_extents_gdf: gpd.GeoDataFrame
+) -> gpd.GeoDataFrame:
+    """
+    Function to merge waterbody polygons located at WOfS All Time Summary tile boundaries.
+
+    Parameters
+    ----------
+    waterbody_polygons : gpd.GeoDataFrame
+        The waterbody polygons.
+    tile_exents_gdf: gpd.GeoDataFrame
+        The extents of the tiles used to generate the waterbody polygons.
+
+    Returns
+    -------
+    gpd.GeoDataFrame
+        Waterbody polygons with polygons located at WOfS All Time Summary tile boundaries merged.
+    """
+    # Get the tiles for the WOfS All Time Summary product.
+    tile_extents_gdf = tile_extents_gdf.to_crs(waterbody_polygons.crs)
+
+    # Add a 1 pixel (30 m) buffer to the dataset extents.
+    buffered_30m_tile_extents_geom = tile_extents_gdf.boundary.buffer(
+        30, cap_style="flat", join_style="mitre"
+    )
+    buffered_30m_tile_extents = gpd.GeoDataFrame(
+        geometry=buffered_30m_tile_extents_geom, crs=waterbody_polygons.crs
+    )
+
+    # Get the polygons at the tile boundaries.
+    boundary_polygons, not_boundary_polygons = filter_by_intersection(
+        gpd_data=waterbody_polygons,
+        gpd_filter=buffered_30m_tile_extents,
+        invert_mask=False,
+        return_inverse=True,
+    )
+
+    # Now combine overlapping polygons in boundary_polygons.
+    merged_boundary_polygons_geoms = shapely.ops.unary_union(boundary_polygons["geometry"])
+
+    # `Explode` the multipolygon back out into individual polygons.
+    merged_boundary_polygons = gpd.GeoDataFrame(
+        crs=waterbody_polygons.crs, geometry=[merged_boundary_polygons_geoms]
+    )
+    merged_boundary_polygons = merged_boundary_polygons.explode(index_parts=True).reset_index(
+        drop=True
+    )
+
+    # Then combine our merged_boundary_polygons with the not_boundary_polygons.
+    all_polygons = gpd.GeoDataFrame(
+        pd.concat([not_boundary_polygons, merged_boundary_polygons], ignore_index=True, sort=True)
+    ).set_geometry("geometry")
+
+    return all_polygons
+
+
 def get_polygons_from_dataset(
     dataset_id: str,
     dask_chunks: dict[str, int] = {"x": 3200, "y": 3200, "time": 1},
