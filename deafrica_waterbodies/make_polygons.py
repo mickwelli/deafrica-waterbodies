@@ -8,9 +8,6 @@ Geoscience Australia - 2021
 """
 
 import logging
-import math
-import multiprocessing
-from functools import partial
 
 import datacube
 import datacube.model
@@ -18,11 +15,9 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import shapely
-import tqdm
 from deafrica_tools.spatial import xr_vectorize
 
-from deafrica_waterbodies.attributes import assign_unique_ids
-from deafrica_waterbodies.filters import filter_by_intersection, filter_waterbodies
+from deafrica_waterbodies.filters import filter_by_intersection
 
 _log = logging.getLogger(__name__)
 
@@ -63,106 +58,6 @@ def check_wetness_thresholds(minimum_wet_thresholds: list) -> str:
             "threshold, which will define the extent/shape of the waterbody polygons.**"
         )
         return print_msg
-
-
-def check_ds_intersects_polygons(
-    polygons_gdf: gpd.GeoDataFrame | None, ds: datacube.model.Dataset
-) -> str:
-    """
-    Check if the extent of a dataset intersects with a set of polygons.
-
-    Parameters
-    ----------
-    polygons_gdf : gpd.GeoDataFrame | None
-    ds : datacube.model.Dataset
-
-    Returns
-    -------
-    str | None
-        Dataset id if the dataset's extent intersects with the polygons.
-    """
-    if polygons_gdf is not None:
-        # Get the extent of the dataset.
-        ds_extent = ds.extent
-        # Reproject the extent of the dataset to match the polygons.
-        ds_extent = ds_extent.to_crs(polygons_gdf.crs)
-        # Get the shapely geometry of the reprojected extent of the dataset.
-        ds_extent_geom = ds_extent.geom
-        # Check if the dataset's extent intersects with any of the polygons.
-        check_intersection = polygons_gdf.geometry.intersects(ds_extent_geom).any()
-        if check_intersection:
-            return str(ds.id)
-        else:
-            return ""
-    else:
-        return str(ds.id)
-
-
-def filter_datasets(
-    dss: list[datacube.model.Dataset], polygons_gdf: gpd.GeoDataFrame | None, num_workers: int = 8
-) -> list[str]:
-    """
-    Filter out datasets that do not intersect with a set of polygons, using a
-    multi-process approach to run the `check_ds_intersects_polygons` function.
-
-    Parameters
-    ----------
-    dss : list[datacube.model.Dataset]
-        A list of Datasets to filter.
-    polygons_gdf : gpd.GeoDataFrame | None
-        A set of polygons in a GeoDataFrame
-    num_workers : int, optional
-        Number of worker processes to use during multi-processing, by default 8
-
-    Returns
-    -------
-    list[str]
-        A list of the filtered datasets ids.
-    """
-    with multiprocessing.Pool(processes=num_workers) as pool:
-        filtered_datasets_ids_ = list(
-            tqdm.tqdm(pool.imap(partial(check_ds_intersects_polygons, polygons_gdf), dss))
-        )
-
-    # Remove empty strings.
-    filtered_datasets_ids = [item for item in filtered_datasets_ids_ if item]
-
-    return filtered_datasets_ids
-
-
-def get_datasets_ids(
-    aoi_gdf: gpd.GeoDataFrame | None, dc: datacube.Datacube | None = None, num_workers: int = 8
-):
-    """
-    Get the dataset ids of the WOfS All Time Summary datasets whose extents intersect
-    with any of the area of interest polygons.
-
-    Parameters
-    ----------
-    aoi_gdf : gpd.GeoDataFrame | None
-        Area of interest
-    dc : datacube.Datacube | None, optional
-        Datacube connection, by default None
-    num_workers : int, optional
-        Number of worker processes to use when filtering datasets, by default 8
-    Returns
-    -------
-    str
-        Dataset ids of the WOfS All Time Summary datasets whose extents intersect
-        with any of the area of interest polygons.
-    """
-    # Connect to the datacube.
-    if dc is None:
-        dc = datacube.Datacube(app="WaterbodiesPolygons")
-
-    # Find all datasets available for the WOfS All Time summary product.
-    dss = dc.index.datasets.search(product=["wofs_ls_summary_alltime"])
-    dss = list(dss)
-
-    # Filter the datasets to the area of interest.
-    filtered_datasets_ids = filter_datasets(dss, aoi_gdf, num_workers)
-
-    return filtered_datasets_ids
 
 
 def merge_polygons_at_dataset_boundaries(waterbody_polygons: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
@@ -219,7 +114,7 @@ def merge_polygons_at_dataset_boundaries(waterbody_polygons: gpd.GeoDataFrame) -
     return all_polygons
 
 
-def get_polygons_using_thresholds(
+def get_polygons_from_dataset(
     dataset_id: str,
     dask_chunks: dict[str, int] = {"x": 3200, "y": 3200, "time": 1},
     resolution: tuple[int, int] = (-30, 30),
@@ -345,131 +240,3 @@ def get_polygons_using_thresholds(
     secondary_threshold_polygons = generated_polygons[secondary_threshold]
 
     return primary_threshold_polygons, secondary_threshold_polygons
-
-
-def get_waterbodies(
-    aoi_gdf: gpd.GeoDataFrame,
-    continental_run: bool = False,
-    num_workers: int = 8,
-    dask_chunks: dict[str, int] = {"x": 3200, "y": 3200, "time": 1},
-    resolution: tuple[int, int] = (-30, 30),
-    output_crs: str = "EPSG:6933",
-    min_valid_observations: int = 128,
-    primary_threshold: float = 0.1,
-    secondary_threshold: float = 0.05,
-    min_polygon_size: float = 4500,
-    max_polygon_size: float = math.inf,
-    filter_out_ocean_polygons: bool = False,
-    land_sea_mask_fp: str = None,
-    filter_out_major_rivers_polygons: bool = False,
-    major_rivers_mask_fp: str = None,
-    filter_out_urban_polygons: bool = False,
-    urban_mask_fp: str = None,
-    handle_large_polygons: str = "nothing",
-    pp_test_threshold: float = 0.005,
-) -> gpd.GeoDataFrame:
-    """
-    Function to generate waterbody polygons for an area of interest.
-
-    Parameters
-    ----------
-    aoi_gdf : gpd.GeoDataFrame
-        GeoDataFrame of polygon(s) defining the area of interest.
-    continental_run : bool, optional
-        If True generate waterbody polygons for all of Africa (all the regions
-        for the WOfS All Time Summary product). Requires `aoi_gdf = None`.
-        If False, generate waterbody polygons for the area of interest defined
-        in `aoi_gdf`.
-        By default False
-    num_workers : int, optional
-        Number of worker processes to use when filtering datasets, by default 8
-    dask_chunks : dict[str, int], optional
-        Dask chunks to use when loading WOfS data, by default {"x": 3000, "y": 3000, "time": 1}
-    resolution : tuple[int, int], optional
-        Resolution to load the WOfS data in, by default (-30, 30)
-    output_crs : _type_, optional
-        CRS to load the WOfS data in, by default "EPSG:6933"
-    min_valid_observations : int, optional
-        Minimum number of observations for a pixel to be valid, by default 128
-    primary_threshold : float, optional
-        Threshold to use to determine the location of the waterbody polygons, by default 0.1
-    secondary_threshold : float, optional
-        Threshold to use to determine the extent / shape of the waterbodies polygons, by default 0.05
-    min_polygon_size : float, optional
-        Minimum area of a waterbody polygon to be included in the output polygons, by default 4500
-    max_polygon_size : float, optional
-        Maximum area of a waterbody polygon to be included in the output polygons, by default math.inf
-    filter_out_ocean_polygons : bool, optional
-        If True, filter out ocean waterbody polygons using the polygons from `land_sea_mask_fp`, by default False
-    land_sea_mask_fp : str, optional
-        Vector file path to the polygons to use to filter out ocean waterbody polygons, by default None
-    filter_out_major_rivers_polygons : bool, optional
-        If True filter out major rivers from the water body polygons, by default False
-    major_rivers_mask_fp : str, optional
-        Vector file path to the polygons to use to filter out major river waterbody polygons, by default None
-    filter_out_urban_polygons : bool, optional
-        If True filter out CBDs from the waterbody polygons, by default False
-    urban_mask_fp : str, optional
-        Vector file path to the polygons to use to filter out CBDs, by default None
-    handle_large_polygons : str, optional
-        Method to use to split large water body polygons, by default "nothing"
-    pp_test_threshold : float, optional
-        Polsby-Popper test value to use when splitting large polygons using the method specified in `handle_large_polygons`, by default 0.005
-
-    Returns
-    -------
-    gpd.GeoDataFrame
-        Waterbody polygons for the area of interest.
-
-    """
-    # Check if this is a continental run.
-    if aoi_gdf is None and continental_run:
-        _log.info("Running for all the WOfS All Time Summary tiles covering Africa...")
-    elif aoi_gdf is not None and continental_run:
-        _log.error("Area of interest specified, yet run type is continental.")
-        raise ValueError("If setting an area of interest, set `continental_run=False`")
-    elif aoi_gdf is not None and not continental_run:
-        _log.info(
-            "Running for the WOfS All Time Summary tiles covering the defined area of interest..."
-        )
-    # Connect to the datacube.
-    dc = datacube.Datacube(app="WaterbodiesPolygons")
-
-    # Get the WOfS All time Summary dataset ids for the area of interest.
-    _log.info("Loading dataset ids..")
-    dataset_ids = get_datasets_ids(aoi_gdf=aoi_gdf, dc=dc, num_workers=num_workers)
-    _log.info(f"Found {len(dataset_ids)} datasets.")
-
-    _log.info("Generating the first temporary set of waterbody polygons.")
-    temp_primary, temp_secondary = get_polygons_using_thresholds(
-        dataset_ids=dataset_ids,
-        dask_chunks=dask_chunks,
-        resolution=resolution,
-        output_crs=output_crs,
-        min_valid_observations=min_valid_observations,
-        primary_threshold=primary_threshold,
-        secondary_threshold=secondary_threshold,
-        dc=dc,
-    )
-
-    _log.info("Filtering waterbodies...")
-    filtered_polygons = filter_waterbodies(
-        primary_threshold_polygons=temp_primary,
-        secondary_threshold_polygons=temp_secondary,
-        min_polygon_size=min_polygon_size,
-        max_polygon_size=max_polygon_size,
-        filter_out_ocean_polygons=filter_out_ocean_polygons,
-        land_sea_mask_fp=land_sea_mask_fp,
-        filter_out_major_rivers_polygons=filter_out_major_rivers_polygons,
-        major_rivers_mask_fp=major_rivers_mask_fp,
-        filter_out_urban_polygons=filter_out_urban_polygons,
-        urban_mask_fp=urban_mask_fp,
-        handle_large_polygons=handle_large_polygons,
-        pp_test_threshold=pp_test_threshold,
-    )
-
-    _log.info("Assigning unique ids to each polygon....")
-    filtered_polygons_with_unique_ids = assign_unique_ids(filtered_polygons)
-
-    # Calculate area, perimeter
-    return filtered_polygons_with_unique_ids
