@@ -83,7 +83,9 @@ def filter_tiles(
     return filtered_tile_ids
 
 
-def tile_wofs_ls_summary_alltime(tile_size_factor: float = 2) -> dict:
+def tile_wofs_ls_summary_alltime(
+    tile_size_factor: float = 2,
+) -> tuple[dict, datacube.api.GridWorkflow]:
     """
     Retile the `wofs_ls_summary_alltime` product into tiles `tile_size_factor`
     number of times bigger than the regular tiles.
@@ -95,8 +97,9 @@ def tile_wofs_ls_summary_alltime(tile_size_factor: float = 2) -> dict:
 
     Returns
     -------
-    dict
+    tuple[dict, datacube.api.GridWorkflow]
         Tiles for the `wofs_ls_summary_alltime` product.
+        GridWorkflow to use to load the tiles.
     """
     # Define a spatial grid with tiles tile_size_factor times the size of the regular
     # wofs_ls_summary_alltime grid.
@@ -127,7 +130,7 @@ def tile_wofs_ls_summary_alltime(tile_size_factor: float = 2) -> dict:
 
     _log.info(f"Number of wofs_ls_summary_alltime tiles: {len(tiles)}")
 
-    return tiles, gs
+    return tiles, gw
 
 
 def get_tiles_ids(
