@@ -406,7 +406,6 @@ def get_polygons_from_tile(
     min_valid_observations: int = 128,
     primary_threshold: float = 0.1,
     secondary_threshold: float = 0.05,
-    dc: datacube.Datacube | None = None,
 ) -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
     """
     Generate water body polygons by thresholding a WOfS All Time Summary tile.
@@ -426,8 +425,6 @@ def get_polygons_from_tile(
         Threshold to use to determine the location of the waterbody polygons, by default 0.1
     secondary_threshold : float, optional
         Threshold to use to determine the extent / shape of the waterbodies polygons, by default 0.05
-    dc : datacube.Datacube | None, optional
-        Datacube connection, by default None
 
     Returns
     -------
@@ -521,7 +518,6 @@ def get_polygons_from_tile_with_land_sea_mask_filtering(
     min_valid_observations: int = 128,
     primary_threshold: float = 0.1,
     secondary_threshold: float = 0.05,
-    dc: datacube.Datacube | None = None,
     land_sea_mask_fp: str | Path = "",
     resampling_method: str = "bilinear",
     filter_land_sea_mask: Callable = filter_hydrosheds_land_mask,
@@ -546,8 +542,6 @@ def get_polygons_from_tile_with_land_sea_mask_filtering(
         Threshold to use to determine the location of the waterbody polygons, by default 0.1
     secondary_threshold : float, optional
         Threshold to use to determine the extent / shape of the waterbodies polygons, by default 0.05
-    dc : datacube.Datacube | None, optional
-        Datacube connection, by default None
     land_sea_mask_fp: str | Path, optional
         File path to raster to use to mask ocean pixels in WOfS data, by default ""
     resampling_method: str, optional
