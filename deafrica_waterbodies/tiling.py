@@ -1,10 +1,15 @@
+import logging
 import multiprocessing
 from functools import partial
 
 import datacube
 import geopandas as gpd
 import tqdm
+from datacube.api import GridWorkflow
+from datacube.model import GridSpec
 from odc.dscache.tools.tiling import parse_gridspec_with_name
+
+_log = logging.getLogger(__name__)
 
 
 def check_tile_intersects_polygons(
@@ -74,5 +79,83 @@ def filter_tiles(
 
     # Remove empty tuples.
     filtered_tile_ids = [item for item in filtered_tile_ids_ if item]
+
+    return filtered_tile_ids
+
+
+def tile_wofs_ls_summary_alltime(tile_size_factor: float = 2) -> dict:
+    """
+    Retile the `wofs_ls_summary_alltime` product into tiles `tile_size_factor`
+    number of times bigger than the regular tiles.
+
+    Parameters
+    ----------
+    tile_size_factor : float, optional
+        Number of times to increase the regular tile size by, by default 2
+
+    Returns
+    -------
+    dict
+        Tiles for the `wofs_ls_summary_alltime` product.
+    """
+    # Define a spatial grid with tiles tile_size_factor times the size of the regular
+    # wofs_ls_summary_alltime grid.
+
+    # Regular grid.
+    grid = "africa_30"
+    grid, gridspec = parse_gridspec_with_name(grid)
+
+    # Multiply the tile size.
+    tile_size = tuple(tile_size_factor * elem for elem in gridspec.tile_size)
+
+    # Define new grid.
+    gs = GridSpec(
+        crs=gridspec.crs,
+        tile_size=tile_size,
+        resolution=gridspec.resolution,
+        origin=gridspec.origin,
+    )
+
+    # Connect to the datacube
+    dc = datacube.Datacube()
+
+    # Define the grid workflow.
+    gw = GridWorkflow(index=dc.index, grid_spec=gs)
+
+    # Tile the wofs_ls_summary_alltime product using the new grid.
+    tiles = gw.list_cells(product="wofs_ls_summary_alltime")
+
+    _log.info(f"Number of wofs_ls_summary_alltime tiles: {len(tiles)}")
+
+    return tiles
+
+
+def get_tiles_ids(
+    aoi_gdf: gpd.GeoDataFrame | None, tile_size_factor: float = 2, num_workers: int = 8
+) -> list[tuple[int, int]]:
+    """
+    Get the tile ids of the WOfS All Time Summary whose extents intersect
+    with any of the area of interest polygons.
+
+    Parameters
+    ----------
+    aoi_gdf : gpd.GeoDataFrame | None
+        Area of interest
+    tile_size_factor : float, optional
+        Number of times to increase the regular tile size when tiling the
+        wofs_ls_summary_alltime product by, by default 2
+    num_workers : int, datasetsoptional
+        Number of worker processes to use when filtering tiles, by default 8
+    Returns
+    -------
+    list[tuple[int, int]]
+        Tile ids of the WOfS All Time Summary tiles whose extents intersect
+        with any of the area of interest polygons.
+    """
+
+    tiles = tile_wofs_ls_summary_alltime(tile_size_factor=tile_size_factor)
+
+    # Filter the tiles to the area of interest.
+    filtered_tile_ids = filter_tiles(tiles, aoi_gdf, num_workers)
 
     return filtered_tile_ids

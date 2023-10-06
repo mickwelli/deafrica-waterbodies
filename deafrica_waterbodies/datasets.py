@@ -73,7 +73,7 @@ def filter_datasets(
 
 def get_datasets_ids(
     aoi_gdf: gpd.GeoDataFrame | None, dc: datacube.Datacube | None = None, num_workers: int = 8
-):
+) -> list[str]:
     """
     Get the dataset ids of the WOfS All Time Summary datasets whose extents intersect
     with any of the area of interest polygons.
@@ -88,7 +88,7 @@ def get_datasets_ids(
         Number of worker processes to use when filtering datasets, by default 8
     Returns
     -------
-    str
+    list[str]
         Dataset ids of the WOfS All Time Summary datasets whose extents intersect
         with any of the area of interest polygons.
     """
