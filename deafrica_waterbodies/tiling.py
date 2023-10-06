@@ -127,7 +127,7 @@ def tile_wofs_ls_summary_alltime(tile_size_factor: float = 2) -> dict:
 
     _log.info(f"Number of wofs_ls_summary_alltime tiles: {len(tiles)}")
 
-    return tiles
+    return tiles, gs
 
 
 def get_tiles_ids(
