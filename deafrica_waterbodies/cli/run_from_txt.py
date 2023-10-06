@@ -5,9 +5,9 @@ import click
 import datacube
 import fsspec
 
-import deafrica_waterbodies.io
-import deafrica_waterbodies.make_polygons
 from deafrica_waterbodies.cli.logs import logging_setup
+from deafrica_waterbodies.io import check_dir_exists, check_file_exists, check_if_s3_uri
+from deafrica_waterbodies.make_polygons import check_wetness_thresholds, get_polygons_from_dataset
 
 
 @click.command("run-from-txt", no_args_is_help=True)
@@ -75,11 +75,11 @@ def run_from_txt(
     output_crs = "EPSG:6933"
 
     # Read the dataset ids from the text file.
-    if not deafrica_waterbodies.io.check_file_exists(dataset_ids_text_file):
+    if not check_file_exists(dataset_ids_text_file):
         _log.error(f"Could not find text file {dataset_ids_text_file}!")
         raise FileNotFoundError(f"Could not find text file {dataset_ids_text_file}!")
     else:
-        if deafrica_waterbodies.io.check_if_s3_uri(dataset_ids_text_file):
+        if check_if_s3_uri(dataset_ids_text_file):
             fs = fsspec.filesystem("s3")
         else:
             fs = fsspec.filesystem("file")
@@ -91,19 +91,19 @@ def run_from_txt(
     polygons_from_thresholds_dir = os.path.join(output_directory, "polygons_from_thresholds")
 
     # Instanstiate the filesystem to use.
-    if deafrica_waterbodies.io.check_if_s3_uri(polygons_from_thresholds_dir):
+    if check_if_s3_uri(polygons_from_thresholds_dir):
         fs = fsspec.filesystem("s3")
     else:
         fs = fsspec.filesystem("file")
 
     # Check if the directory exists. If it does not, create it.
-    if not deafrica_waterbodies.io.check_dir_exists(polygons_from_thresholds_dir):
+    if not check_dir_exists(polygons_from_thresholds_dir):
         fs.mkdirs(polygons_from_thresholds_dir, exist_ok=True)
         _log.info(f"Created directory {polygons_from_thresholds_dir}")
 
     # Check if the wetness thresholds have been set correctly.
     minimum_wet_thresholds = [secondary_threshold, primary_threshold]
-    _log.info(deafrica_waterbodies.make_polygons.check_wetness_thresholds(minimum_wet_thresholds))
+    _log.info(check_wetness_thresholds(minimum_wet_thresholds))
 
     # Connect to the datacube.
     dc = datacube.Datacube(app="GenerateWaterbodyPolygons")
@@ -122,15 +122,15 @@ def run_from_txt(
             _log.info(
                 f"Checking existence of {primary_threshold_polygons_fp} and {secondary_threshold_polygons_fp}"
             )
-            exists = deafrica_waterbodies.io.check_file_exists(
-                primary_threshold_polygons_fp
-            ) and deafrica_waterbodies.io.check_file_exists(secondary_threshold_polygons_fp)
+            exists = check_file_exists(primary_threshold_polygons_fp) and check_file_exists(
+                secondary_threshold_polygons_fp
+            )
 
         if overwrite or not exists:
             (
                 primary_threshold_polygons,
                 secondary_threshold_polygons,
-            ) = deafrica_waterbodies.make_polygons.get_polygons_using_thresholds(
+            ) = get_polygons_from_dataset(
                 dataset_id=dataset_id,
                 dask_chunks=dask_chunks,
                 resolution=resolution,
