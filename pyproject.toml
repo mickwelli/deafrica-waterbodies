@@ -35,6 +35,7 @@ dependencies = [
     'gdal',
     'geopandas',
     'numpy',
+    'odc-dscache',
     'pandas',
     'python-dateutil',
     'python-geohash',
