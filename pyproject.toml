@@ -23,26 +23,28 @@ classifiers=[
     'Topic :: Scientific/Engineering :: GIS',
     'Topic :: Scientific/Engineering :: Hydrology',
 ]
-requires-python = ">=3.9.0"
+requires-python = ">=3.6.0"
 dependencies = [
-    'numpy',
-    'pandas',
-    'geopandas',
-    'python-geohash',
-    'datacube',
-    'shapely',
-    'click',
-    'fsspec',
     'boto3',
-    'botocore',
-    'rasterio',
-    's3urls',
-    'python-dateutil',
-    'deafrica-tools >= 2.0.3',
     'boto3-stubs[sqs,s3]',
+    'botocore',
+    'click',
+    'datacube',
+    'deafrica-tools >= 2.1.2',
+    'fsspec',
+    'gdal',
+    'geopandas',
+    'numpy',
+    'odc-dscache',
+    'pandas',
+    'python-dateutil',
+    'python-geohash',
+    'shapely',
+    'tqdm',
     # Code style
+    'black',
+    'isort',
     'flake8',
-    'black', 
     # Testing
     'pytest',
 ]
@@ -52,6 +54,7 @@ dynamic = ["version"]
 Homepage = "https://github.com/digitalearthafrica/deafrica-waterbodies"
 Repository = "https://github.com/digitalearthafrica/deafrica-waterbodies"
 Documentation = "https://github.com/digitalearthafrica/deafrica-waterbodies#readme"
+"Bug Tracker" = "https://github.com/digitalearthafrica/deafrica-waterbodies/issues"
 
 [project.scripts]
 deafrica-waterbodies="deafrica_waterbodies.cli.main:main"
@@ -67,3 +70,16 @@ log_cli = true
 log_cli_level = "INFO"
 log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)"
 log_cli_date_format = "%Y-%m-%d %H:%M:%S"
+
+[tool.black]
+line-length = 100
+
+[tool.isort]
+skip_gitignore = true
+# Configure isort to be compatible with black.
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+line_length = 100

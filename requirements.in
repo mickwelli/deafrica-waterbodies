@@ -1,0 +1,31 @@
+# Dependencies listed in pyproject.toml
+boto3
+boto3-stubs[sqs,s3]
+botocore
+click
+datacube
+deafrica-tools >= 2.1.2 --extra-index-url="https://packages.dea.ga.gov.au"
+fsspec
+gdal
+geopandas
+numpy
+odc-dscache --extra-index-url="https://packages.dea.ga.gov.au"
+pandas
+python-dateutil
+python-geohash
+shapely
+tqdm
+# Code style
+black
+isort
+flake8
+# Testing
+pytest
+jupyterlab
+moto[all]
+# Required by index_tiles.sh
+odc-apps-dc-tools --extra-index-url="https://packages.dea.ga.gov.au"
+# To match osgeo/gdal:ubuntu-small-3.6.3 in Dockerfile
+gdal==3.6.3
+# Required in indexing data for tests.
+SQLAlchemy<2.0
