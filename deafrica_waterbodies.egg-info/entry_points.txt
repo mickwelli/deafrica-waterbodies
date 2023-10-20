@@ -1,0 +1,2 @@
+[console_scripts]
+deafrica-waterbodies = deafrica_waterbodies.cli.main:main
