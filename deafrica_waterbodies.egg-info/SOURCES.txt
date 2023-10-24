@@ -4,6 +4,8 @@ Dockerfile
 LICENSE
 Makefile
 README.rst
+Waterbody_animation-Chilwa.ipynb
+Waterbody_animation.ipynb
 docker-compose.yml
 index_tiles.sh
 pyproject.toml
@@ -85,6 +87,8 @@ notebooks/RemoveRiversfromWaterBodyPolygons.ipynb
 notebooks/Sentinel_2_waterbodies.ipynb
 notebooks/Subpixel_waterbodies.ipynb
 notebooks/TurnWaterObservationsIntoWaterbodyPolygons.ipynb
+notebooks/Untitled.ipynb
+notebooks/Untitled1.ipynb
 notebooks/UsingCommandLineTool.ipynb
 notebooks/WOfSImputation.ipynb
 notebooks/WaterbodyPolygons.ipynb
